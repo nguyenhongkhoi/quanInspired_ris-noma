@@ -1,9 +1,9 @@
-=== HUONG DAN CHAY — quanInspired_ris-noma (tren MAY CHAY) ===
+=== HUONG DAN CHAY - quanInspired_ris-noma (tren MAY CHAY) ===
 Cap nhat: 2026-11-21
 
 Trang thai lenh:
   [SAN SANG]  code da viet, chay duoc ngay
-  [CHUA CO]   code chua viet — lenh ghi truoc de biet quy trinh, chay se bao loi
+  [CHUA CO]   code chua viet - lenh ghi truoc de biet quy trinh, chay se bao loi
 
 Moi lenh chay tu thu muc goc du an (thu muc chua sanity_check.py).
 --out-dir chi la TEN run -> output nam o ./result/<ten>.
@@ -31,7 +31,7 @@ Moi run mot ten rieng (vd. bl_quick_01, bl_quick_02...). Chay lai cung ten = res
 
 
 ------------------------------------------------------------------
-1. SANITY CHECK — buoc bat buoc dau tien                   [SAN SANG]
+1. SANITY CHECK - buoc bat buoc dau tien                   [SAN SANG]
 ------------------------------------------------------------------
   python sanity_check.py --out-dir sanity
   python sanity_check.py --out-dir sanity --fast          (may cham: bank nho hon)
@@ -67,7 +67,7 @@ Moi run mot ten rieng (vd. bl_quick_01, bl_quick_02...). Chay lai cung ten = res
 
 
 ------------------------------------------------------------------
-3. QUANTUM-INSPIRED (QPSO) — dung lai cases/labels/models cua baseline   [CHUA CO]
+3. QUANTUM-INSPIRED (QPSO) - dung lai cases/labels/models cua baseline   [CHUA CO]
 ------------------------------------------------------------------
   python Quantummodel_code/run_quantum.py --preset quick --stage all --baseline-dir bl_quick_01 --out-dir q_quick_01 --dry-run
   python Quantummodel_code/run_quantum.py --preset quick --stage all --baseline-dir bl_quick_01 --out-dir q_quick_01

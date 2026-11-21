@@ -1,8 +1,8 @@
-# Chỉ đưa lên máy chạy những gì cần để chạy code:
+# Only what is needed to RUN goes to the run machine:
 #   common/  baseline_code/  Quantummodel_code/  sanity_check.py  make_report.py
-#   requirements.txt  command.txt  .gitignore
+#   requirements.txt  requirements-gpu.txt  command.txt  .gitignore
 
-# --- Tài liệu / bàn giao chỉ dùng trên máy code ---
+# --- Docs / handoff used only on the coding machine ---
 source_paper/
 claude.md
 CLAUDE.md
@@ -11,7 +11,7 @@ promt_phien_sau.txt
 PROGRESS.md
 .claude/
 
-# --- Output: do máy chạy sinh ra, chép thủ công về, không commit ---
+# --- Outputs: produced on the run machine, copied back manually ---
 result/
 
 # --- Python ---
@@ -22,7 +22,7 @@ __pycache__/
 .mypy_cache/
 .ipynb_checkpoints/
 
-# --- Môi trường ảo ---
+# --- Virtual environments ---
 .venv/
 venv/
 env/

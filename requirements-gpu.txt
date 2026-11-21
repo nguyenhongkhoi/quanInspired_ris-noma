@@ -1,18 +1,17 @@
-# PyTorch có CUDA cho RTX 4090 (Ada Lovelace, sm_89).
-# Cài SAU requirements.txt:
+# PyTorch with CUDA for RTX 4090 (Ada Lovelace, sm_89). ASCII only.
+# Install AFTER requirements.txt:
 #     pip install -r requirements.txt
 #     pip install -r requirements-gpu.txt
 #
-# Ghi chú:
-# - sm_89 được mọi bản CUDA hiện hành hỗ trợ (cu118 ... cu130). Chọn cu128 vì ổn định
-#   và hợp với driver phổ biến: cần driver NVIDIA >= 570.
-# - Driver cũ hơn (560.x): đổi dòng index thành .../whl/cu126.
-#   Driver mới (>= 580) dùng .../whl/cu130 cũng được.
-# - File này chỉ chứa torch, vì --index-url áp dụng cho cả file. numpy/scipy/...
-#   vẫn cài từ PyPI qua requirements.txt.
-# - Kiểm tra sau khi cài:
+# Notes:
+# - sm_89 is supported by every current CUDA build (cu118 ... cu130).
+#   cu128 needs NVIDIA driver >= 570.
+# - Driver 560.x: change the index line to .../whl/cu126
+#   Driver >= 580: .../whl/cu130 also works.
+# - This file only holds torch, because --index-url applies to the whole file.
+# - Check after install:
 #     python -c "import torch; print(torch.__version__, torch.version.cuda, torch.cuda.is_available(), torch.cuda.get_device_name(0))"
-#   Kỳ vọng: True và "NVIDIA GeForce RTX 4090".
+#   Expected: True and "NVIDIA GeForce RTX 4090".
 
 --index-url https://download.pytorch.org/whl/cu128
 torch>=2.7

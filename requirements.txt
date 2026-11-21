@@ -1,9 +1,9 @@
-# Thư viện cơ bản — cài trên MÁY CHẠY (không cài trên máy code).
-# Python khuyến nghị 3.12 (bài gốc dùng 3.12.7); tối thiểu 3.10.
+# Base libraries - install on the RUN machine. ASCII only (pip on Windows reads cp1252).
+# Python 3.12 recommended (source paper: 3.12.7); minimum 3.10.
 #     pip install -r requirements.txt
-# PyTorch cài riêng:
-#     GPU (RTX 4090)   : pip install -r requirements-gpu.txt
-#     chỉ CPU          : pip install torch --index-url https://download.pytorch.org/whl/cpu
+# PyTorch is installed separately:
+#     GPU (RTX 4090): pip install -r requirements-gpu.txt
+#     CPU only      : pip install torch --index-url https://download.pytorch.org/whl/cpu
 numpy>=2.0
 scipy>=1.13
 pandas>=2.2
