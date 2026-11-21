@@ -98,14 +98,19 @@ def to_markdown(df: pd.DataFrame, floatfmt: str = ".4f") -> str:
 # ---------------------------------------------------------------------------
 # Tables
 # ---------------------------------------------------------------------------
+SHOW_TIME = False   # user decision 2026-11-21: no timing columns/figures (time_ms kept in trials.csv)
+
+
 def summary_table(df: pd.DataFrame) -> pd.DataFrame:
     rows = []
     for m in methods_in(df):
         d = df[df["method"] == m]
-        rows.append(dict(Method=name(m), key=m, Trials=len(d), Passed=int(d["passed"].sum()),
-                         **{"Pass(%)": 100.0 * d["passed"].mean(), "R_gated": d["gated"].mean(),
-                            "Time(ms)": d["time_ms"].mean(), "Infer(ms)": d["infer_ms"].mean(),
-                            "B": int(d["budget"].mode().iloc[0])}))
+        r = dict(Method=name(m), key=m, Trials=len(d), Passed=int(d["passed"].sum()),
+                 **{"Pass(%)": 100.0 * d["passed"].mean(), "R_gated": d["gated"].mean()})
+        if SHOW_TIME:
+            r.update({"Time(ms)": d["time_ms"].mean(), "Infer(ms)": d["infer_ms"].mean()})
+        r["B"] = int(d["budget"].mode().iloc[0])
+        rows.append(r)
     return pd.DataFrame(rows)
 
 
@@ -217,8 +222,11 @@ def val_budget_table(val: pd.DataFrame) -> pd.DataFrame:
     for (m, B), g in val.groupby(["method", "budget"]):
         if m.endswith("_raw"):
             continue
-        rows.append(dict(Method=name(m), key=m, B=int(B), Trials=len(g), **{
-            "Pass(%)": 100 * g["passed"].mean(), "R_gated": g["gated"].mean(), "Time(ms)": g["time_ms"].mean()}))
+        r = dict(Method=name(m), key=m, B=int(B), Trials=len(g),
+                 **{"Pass(%)": 100 * g["passed"].mean(), "R_gated": g["gated"].mean()})
+        if SHOW_TIME:
+            r["Time(ms)"] = g["time_ms"].mean()
+        rows.append(r)
     out = pd.DataFrame(rows)
     if not out.empty:
         out["_o"] = out["key"].map({k: i for i, k in enumerate(ORDER)})
@@ -428,17 +436,21 @@ def fig3_val_budget(vb: pd.DataFrame, fig_dir: Path, title: str = "") -> None:
     if vb.empty:
         return
     plt = _plt()
-    fig, ax = plt.subplots(1, 3, figsize=(12, 3.6))
+    cols = ["Pass(%)", "R_gated"] + (["Time(ms)"] if SHOW_TIME and "Time(ms)" in vb.columns else [])
+    ylabels = {"Pass(%)": "Assessment pass rate (%)", "R_gated": "Gated covert rate (bit/s/Hz)",
+               "Time(ms)": "Mean allocation time (ms)"}
+    fig, ax = plt.subplots(1, len(cols), figsize=(4.2 * len(cols), 3.6))
     full_keys = [k for k in vb["key"].unique() if k.startswith("full_")]
     for k in [k for k in methods_in(vb.rename(columns={"key": "method"})) if not k.startswith("full_") and not k.startswith("direct")]:
         g = vb[vb["key"] == k].sort_values("B")
-        for a, col in zip(ax, ("Pass(%)", "R_gated", "Time(ms)")):
-            a.plot(g["B"], g[col], marker=MARKERS.get(k, "o"), color=COLORS.get(k), label=name(k))
+        ls = "--" if k.endswith("qpso") else "-"
+        for a, col in zip(ax, cols):
+            a.plot(g["B"], g[col], marker=MARKERS.get(k, "o"), color=COLORS.get(k), ls=ls, label=name(k))
     for k in full_keys:
         g = vb[vb["key"] == k]
-        for a, col in zip(ax, ("Pass(%)", "R_gated", "Time(ms)")):
+        for a, col in zip(ax, cols):
             a.axhline(float(g[col].iloc[0]), color=COLORS.get(k, "k"), ls="--", lw=1, label=f"{name(k)} ({int(g['B'].iloc[0])})")
-    for a, yl in zip(ax, ("Assessment pass rate (%)", "Gated covert rate (bit/s/Hz)", "Mean allocation time (ms)")):
+    for a, yl in zip(ax, [ylabels[c] for c in cols]):
         a.set_xlabel("Objective evaluations")
         a.set_ylabel(yl)
         a.set_xticks(sorted(vb[~vb["key"].str.startswith(("full_", "direct"))]["B"].unique()))
@@ -678,7 +690,8 @@ def make_all(out_dir: Path, sys_: SysConfig, exp: ExpConfig, test: pd.DataFrame 
         fig_anchor_grid(val, fig_dir)
     if test is not None and not test.empty:
         fig4_vs_K(test, exp, fig_dir)
-        fig5_rate_vs_time(test, exp, fig_dir)
+        if SHOW_TIME:
+            fig5_rate_vs_time(test, exp, fig_dir)
         fig6_cv(T.get("table_cv_groups.csv", pd.DataFrame()), fig_dir)
         fig7_outcomes(T.get("table_check_outcomes.csv", pd.DataFrame()), fig_dir)
         fig_paired(T.get("table4_paired.csv", pd.DataFrame()), fig_dir)

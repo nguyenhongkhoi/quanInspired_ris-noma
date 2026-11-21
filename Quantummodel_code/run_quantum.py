@@ -26,8 +26,9 @@ from common.config import SysConfig  # noqa: E402
 from common.methods import QUANTUM_METHODS, make_spec  # noqa: E402
 from common.runner import run_trial_stage  # noqa: E402
 
-ANCHOR_W0_GRID = (0.25, 0.5, 0.75)
-ANCHOR_FRAC_GRID = (0.2, 0.3, 0.5)
+# Quick run (2026-11-21) selected (0.75, 0.5) = upper corner of the 3x3 grid -> grid extended.
+ANCHOR_W0_GRID = (0.25, 0.5, 0.75, 1.0)
+ANCHOR_FRAC_GRID = (0.2, 0.3, 0.5, 0.7)
 
 
 def check_against_baseline(exp, bdir: Path) -> None:
