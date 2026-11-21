@@ -1,98 +1,113 @@
 === HUONG DAN CHAY - quanInspired_ris-noma (tren MAY CHAY) ===
-Cap nhat: 2026-11-21
-
-Trang thai lenh:
-  [SAN SANG]  code da viet, chay duoc ngay
-  [CHUA CO]   code chua viet - lenh ghi truoc de biet quy trinh, chay se bao loi
+Cap nhat: 2026-11-21 (toan bo code da viet + qua py_compile; chua chay pipeline lan nao)
 
 Moi lenh chay tu thu muc goc du an (thu muc chua sanity_check.py).
 --out-dir chi la TEN run -> output nam o ./result/<ten>.
-Moi run mot ten rieng (vd. bl_quick_01, bl_quick_02...). Chay lai cung ten = resume.
+Moi run mot ten rieng. Chay lai DUNG lenh cu (cung ten) = resume tu cho dung.
+Chay TUNG LENH MOT (dung dan nhieu lenh mot luc vao PowerShell).
+
+Phan cong thiet bi:
+  - PSO/QPSO, nhan, validate, test, assessment: CPU nhieu tien trinh (--workers, mac dinh = so core - 1)
+  - Train GNN/MLP: GPU (--device auto = cuda neu co); inference do thoi gian: CPU
 
 
 ------------------------------------------------------------------
-0. CAI DAT (mot lan)                                       [SAN SANG]
+0. CAI DAT (mot lan)
 ------------------------------------------------------------------
-  python --version                      (khuyen nghi 3.12; toi thieu 3.10)
-  nvidia-smi                            (xem Driver Version: cu128 can >= 570; 560.x thi dung cu126)
   python -m venv .venv
-  .venv\Scripts\activate                (Windows; Linux/Mac: source .venv/bin/activate)
+  .venv\Scripts\activate
   python -m pip install --upgrade pip
   pip install -r requirements.txt
-  pip install -r requirements-gpu.txt   (PyTorch CUDA cho RTX 4090)
-    - neu driver < 570: sua dong index trong requirements-gpu.txt thanh .../whl/cu126
-    - chi CPU: pip install torch --index-url https://download.pytorch.org/whl/cpu
-
-  Kiem tra nhanh:
-  python -c "import numpy, scipy, pandas, matplotlib; print('ok')"
+  pip install -r requirements-gpu.txt      (PyTorch CUDA cu128 cho RTX 4090; driver < 570 -> doi sang cu126)
   python -c "import torch; print(torch.__version__, torch.version.cuda, torch.cuda.is_available(), torch.cuda.get_device_name(0))"
-    ky vong: ... True NVIDIA GeForce RTX 4090
-  GUI LAI 3 dong tren (python --version, nvidia-smi dong Driver, dong torch).
 
 
 ------------------------------------------------------------------
-1. SANITY CHECK - buoc bat buoc dau tien                   [SAN SANG]
+1. SANITY CHECK (da PASS 26/26 ngay 2026-11-21; chay lai de kiem so tham so model torch)
 ------------------------------------------------------------------
   python sanity_check.py --out-dir sanity
-  python sanity_check.py --out-dir sanity --fast          (may cham: bank nho hon)
-
-  Output : ./result/sanity/sanity.csv
-  Ma thoat: 0 = khong co FAIL, 1 = co FAIL
-  GUI LAI: toan bo dong PASS/FAIL/WARN/INFO + dong tom tat cuoi.
+  GUI LAI: 2 dong "GNN params (torch model)" va "MLP params (torch model)" + dong tom tat.
 
 
 ------------------------------------------------------------------
-2. BASELINE (bai goc: PSO, MLP, GNN)                         [CHUA CO]
+2. SMOKE TEST - chay pipeline sieu nho (~vai phut) de bat loi som. CHAY CAI NAY TRUOC.
 ------------------------------------------------------------------
-  Xem ke hoach, so trial, uoc tinh thoi gian (khong chay):
+  python baseline_code/run_baseline.py --preset quick --stage all --out-dir smoke_bl --n-train-layouts 2 --n-val-layouts 1 --n-test-layouts 1 --cases-per-layout 2 --replicates 1 --search-samples 2000 --assess-samples 5000 --label-samples 5000 --budget-full 300 --budgets-val 150 --epochs 5
+
+  python Quantummodel_code/run_quantum.py --preset quick --stage all --baseline-dir smoke_bl --out-dir smoke_q --n-train-layouts 2 --n-val-layouts 1 --n-test-layouts 1 --cases-per-layout 2 --replicates 1 --search-samples 2000 --assess-samples 5000 --label-samples 5000 --budget-full 300 --budgets-val 150 --epochs 5
+
+  python make_report.py --baseline-dir smoke_bl --quantum-dir smoke_q --out-dir smoke_cmp
+
+  So lieu smoke KHONG co y nghia khoa hoc, chi de xem code chay het khong loi.
+  GUI LAI: neu loi -> toan bo traceback; neu chay het -> dong cuoi moi lenh.
+  (run_quantum phai dung DUNG cac override nhu baseline, neu khac se bao loi "settings differ")
+
+
+------------------------------------------------------------------
+3. BASELINE preset quick
+------------------------------------------------------------------
+  Xem ke hoach + uoc tinh thoi gian (khong chay):
   python baseline_code/run_baseline.py --preset quick --stage all --out-dir bl_quick_01 --dry-run
 
-  Chay het pipeline preset quick (vai phut):
+  Chay het (cases -> labels -> train -> validate -> test -> tables):
   python baseline_code/run_baseline.py --preset quick --stage all --out-dir bl_quick_01
 
-  Chay tung stage (thu tu: cases -> labels -> train -> validate -> test -> tables):
+  Hoac tung stage:
   python baseline_code/run_baseline.py --preset quick --stage cases,labels --out-dir bl_quick_01
   python baseline_code/run_baseline.py --preset quick --stage train        --out-dir bl_quick_01
   python baseline_code/run_baseline.py --preset quick --stage validate     --out-dir bl_quick_01
   python baseline_code/run_baseline.py --preset quick --stage test,tables  --out-dir bl_quick_01
 
-  Ve lai bang/hinh tu CSV co san (khong chay lai thi nghiem):
+  Ve lai bang/hinh tu CSV co san:
   python baseline_code/run_baseline.py --preset quick --stage tables --out-dir bl_quick_01
 
-  Quy mo lon hon:
-  python baseline_code/run_baseline.py --preset medium --stage all --out-dir bl_medium_01 --workers 8
-  python baseline_code/run_baseline.py --preset paper  --stage all --out-dir bl_paper_01  --workers 8
-
-  GUI LAI: result/<ten>/run.log, result/<ten>/tables/*.csv, result/<ten>/figures/
+  GUI LAI: result/bl_quick_01/run.log, result/bl_quick_01/tables/ (tat ca), result/bl_quick_01/figures/,
+           result/bl_quick_01/validation/selected_budget.json
 
 
 ------------------------------------------------------------------
-3. QUANTUM-INSPIRED (QPSO) - dung lai cases/labels/models cua baseline   [CHUA CO]
+4. QPSO preset quick (dung lai cases/models/budget cua bl_quick_01)
 ------------------------------------------------------------------
   python Quantummodel_code/run_quantum.py --preset quick --stage all --baseline-dir bl_quick_01 --out-dir q_quick_01 --dry-run
   python Quantummodel_code/run_quantum.py --preset quick --stage all --baseline-dir bl_quick_01 --out-dir q_quick_01
 
-  Tuy chon QPSO (mac dinh trong ngoac):
-    --beta-start 1.0 --beta-end 0.5 --boundary reflect|clip
-    --anchor-w0 0.5 --anchor-frac 0.3 --anchor-gate / --no-anchor-gate
+  stage validate: duong QPSO theo budget + luoi anchor_w0 x anchor_frac (3x3) CHI tren validation
+                  -> validation/selected_anchor.json
+  Tuy chon: --beta-start 1.0 --beta-end 0.5 --boundary reflect|clip --anchor-gate/--no-anchor-gate
+            --anchor-w0 X --anchor-frac Y (ghi de gia tri chon tu validation)
 
-  Quy mo paper:
-  python Quantummodel_code/run_quantum.py --preset paper --stage all --baseline-dir bl_paper_01 --out-dir q_paper_01 --workers 8
-
-  GUI LAI: result/<ten>/run.log, tables/*.csv, figures/
+  GUI LAI: result/q_quick_01/run.log, tables/, figures/, validation/selected_anchor.json
 
 
 ------------------------------------------------------------------
-4. SO SANH PSO vs QPSO                                       [CHUA CO]
+5. SO SANH PSO vs QPSO
 ------------------------------------------------------------------
   python make_report.py --baseline-dir bl_quick_01 --quantum-dir q_quick_01 --out-dir cmp_quick_01
-  python make_report.py --baseline-dir bl_paper_01 --quantum-dir q_paper_01 --out-dir cmp_paper_01 --ref gnn_pso
-
-  GUI LAI: result/<ten>/tables/*.csv, tables.md, figures/
+  GUI LAI: result/cmp_quick_01/tables/ (dac biet table4_paired.csv), figures/
 
 
 ------------------------------------------------------------------
-5. TUY CHON CHUNG (run_baseline.py, run_quantum.py)
+6. CHAY SONG SONG CHO NHANH
+------------------------------------------------------------------
+  Phu thuoc: baseline cases->labels->train->validate  ==> moi chay duoc QPSO va baseline test.
+  Sau khi baseline xong stage validate, mo 2 terminal chay CUNG LUC, chia core:
+    Terminal 1: python baseline_code/run_baseline.py --preset quick --stage test,tables --out-dir bl_quick_01 --workers 8
+    Terminal 2: python Quantummodel_code/run_quantum.py --preset quick --stage all --baseline-dir bl_quick_01 --out-dir q_quick_01 --workers 8
+  (tong --workers cua 2 terminal <= so core - 1). Ca hai xong -> chay make_report.
+  Luu y: chay song song lam cot Time(ms) bi nhieu; khi can so thoi gian cho bai, chay rieng tung cai.
+
+
+------------------------------------------------------------------
+7. QUY MO LON (sau khi quick on)
+------------------------------------------------------------------
+  python baseline_code/run_baseline.py --preset paper --stage all --out-dir bl_paper_01
+  python Quantummodel_code/run_quantum.py --preset paper --stage all --baseline-dir bl_paper_01 --out-dir q_paper_01
+  python make_report.py --baseline-dir bl_paper_01 --quantum-dir q_paper_01 --out-dir cmp_paper_01
+  (medium: thay paper -> medium, ten thu muc tuong ung)
+
+
+------------------------------------------------------------------
+8. TUY CHON CHUNG (run_baseline.py, run_quantum.py)
 ------------------------------------------------------------------
   --preset quick|medium|paper        --stage all | cases,labels,train,validate,test,tables
   --out-dir TEN                      --methods m1,m2,...
@@ -101,9 +116,9 @@ Moi run mot ten rieng (vd. bl_quick_01, bl_quick_02...). Chay lai cung ten = res
   --replicates R
   --search-samples M  --assess-samples M  --label-samples M
   --swarm 30  --budget-full 1800  --budget-short B  --budgets-val 150,300,450
-  --epochs 200  --batch-size 32  --lr 1e-3
+  --epochs 200  --batch-size 32  --lr 1e-3  --device auto|cpu|cuda
   --workers W  (mac dinh = so core - 1)     --seed 2026
-  --overwrite  (mac dinh la resume)         --no-plots  --quiet  --dry-run  --log-every N
+  --overwrite  (xoa ket qua stage roi chay lai)  --no-plots  --quiet  --dry-run  --log-every N
 
   Method keys:
     baseline: full_pso rand_pso direct_mlp direct_gnn mlp_pso gnn_pso
@@ -111,11 +126,10 @@ Moi run mot ten rieng (vd. bl_quick_01, bl_quick_02...). Chay lai cung ten = res
 
 
 ------------------------------------------------------------------
-6. MEO
+9. MEO
 ------------------------------------------------------------------
-  - Bi ngat giua chung: chay lai DUNG lenh cu (cung --out-dir) -> tu resume.
-  - Muon chay lai tu dau: them --overwrite, hoac doi ten --out-dir.
-  - Lenh se chay lau: ghi output ra file de gui lai:
-      python sanity_check.py --out-dir sanity > sanity_console.txt 2>&1
-  - Nen nen thu muc ket qua de gui: Compress-Archive result\bl_quick_01 bl_quick_01.zip
+  - Bi ngat: chay lai DUNG lenh cu -> resume theo nhom (layout, K).
+  - Doi tham so quan trong (seed, so mau, so layout...) ma giu ten cu -> bi chan; doi ten --out-dir hoac them --overwrite.
+  - Ghi console ra file: <lenh> > log_console.txt 2>&1
+  - Nen ket qua de gui: Compress-Archive result\bl_quick_01 bl_quick_01.zip
 === HET ===

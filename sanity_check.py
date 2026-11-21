@@ -139,6 +139,17 @@ def main() -> int:
            + dense(96, 32) + dense(32, 2) + dense(128, 32) + dense(32, 1))
     check("GNN params (Table VI, analytic)", gnn == 24387, gnn, "24387", "model thuc se kiem khi co models.py")
     check("MLP params (Table VI, analytic)", mlp == 24291, mlp, "24291", "model thuc se kiem khi co models.py")
+    try:
+        from common.models import HAS_TORCH
+        if HAS_TORCH:
+            from common.models import AllocNet, count_params
+            ng, nm = count_params(AllocNet("gnn", sys_)), count_params(AllocNet("mlp", sys_))
+            check("GNN params (torch model)", ng == 24387, ng, "24387")
+            check("MLP params (torch model)", nm == 24291, nm, "24291")
+        else:
+            report("torch model params", "WARN", "no torch", "24387 / 24291", "PyTorch chua cai")
+    except Exception as exc:  # noqa: BLE001
+        report("torch model params", "FAIL", repr(exc), "24387 / 24291")
 
     # ---------------- B. determinism ------------------------------------------
     s1 = stable_seed(2026, "search", 1000, 4)

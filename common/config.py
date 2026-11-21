@@ -182,6 +182,7 @@ class ExpConfig:
     bootstrap_seed: int = 7317
     seed: int = 2026
     workers: int = 1
+    device: str = "auto"      # training device: auto|cpu|cuda (inference for timing is CPU)
     # QPSO (only used by Quantummodel_code)
     beta_start: float = 1.0
     beta_end: float = 0.5

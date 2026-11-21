@@ -63,6 +63,8 @@ def add_common_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--quiet", action="store_true")
     p.add_argument("--dry-run", action="store_true")
     p.add_argument("--log-every", type=int, default=1)
+    p.add_argument("--device", choices=("auto", "cpu", "cuda"), default=None,
+                   help="training device for GNN/MLP (default auto = cuda if available)")
 
 
 def add_quantum_args(p: argparse.ArgumentParser) -> None:
@@ -95,10 +97,79 @@ def exp_config_from_args(args: argparse.Namespace) -> ExpConfig:
         assess_samples=args.assess_samples, label_samples=args.label_samples,
         swarm=args.swarm, budget_full=args.budget_full, budget_short=args.budget_short,
         budgets_val=args.budgets_val, epochs=args.epochs, batch_size=args.batch_size,
-        lr=args.lr, seed=args.seed,
+        lr=args.lr, seed=args.seed, device=args.device,
         workers=args.workers if args.workers is not None else default_workers(),
     )
     for name in ("beta_start", "beta_end", "boundary", "anchor_w0", "anchor_frac", "anchor_gate"):
         if hasattr(args, name):
             ov[name] = getattr(args, name)
     return exp_from_preset(args.preset, **ov)
+
+
+# ---------------------------------------------------------------------------
+# Run initialisation: config.json, run.log, resume safety
+# ---------------------------------------------------------------------------
+CRITICAL_KEYS = ("seed", "search_samples", "assess_samples", "label_samples", "n_train_layouts",
+                 "n_val_layouts", "n_test_layouts", "cases_per_layout", "replicates", "k_train",
+                 "k_test", "swarm", "budget_full")
+
+
+def _versions() -> dict:
+    import platform
+    import sys as _sys
+    v = {"python": _sys.version.split()[0], "platform": platform.platform()}
+    for mod in ("numpy", "scipy", "pandas", "matplotlib", "torch"):
+        try:
+            v[mod] = __import__(mod).__version__
+        except Exception:
+            v[mod] = None
+    try:
+        import subprocess
+        v["git"] = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, capture_output=True,
+                                  text=True, timeout=5).stdout.strip() or None
+    except Exception:
+        v["git"] = None
+    return v
+
+
+def _norm(v):
+    return list(v) if isinstance(v, (list, tuple)) else v
+
+
+def load_exp_config(run_dir: Path) -> ExpConfig:
+    import json
+    p = Path(run_dir) / "config.json"
+    if not p.exists():
+        raise SystemExit(f"missing {p}: run that stage first")
+    d = json.loads(p.read_text(encoding="utf-8"))["exp"]
+    for k in ("k_train", "k_test", "budgets_val", "train_seeds", "pso_seeds"):
+        if k in d and d[k] is not None:
+            d[k] = tuple(d[k])
+    known = set(ExpConfig.__dataclass_fields__)
+    return ExpConfig(**{k: v for k, v in d.items() if k in known})
+
+
+def init_run(out_dir: Path, sys_, exp: ExpConfig, args, kind: str, overwrite: bool = False):
+    """Create out_dir, run.log and config.json; refuse to resume with different critical settings."""
+    import json
+    from datetime import datetime
+
+    from .progress import setup_run_logger
+    out_dir.mkdir(parents=True, exist_ok=True)
+    cfg_path = out_dir / "config.json"
+    if cfg_path.exists() and not overwrite:
+        old = json.loads(cfg_path.read_text(encoding="utf-8")).get("exp", {})
+        diff = {k: (old.get(k), _norm(getattr(exp, k))) for k in CRITICAL_KEYS
+                if k in old and _norm(old.get(k)) != _norm(getattr(exp, k))}
+        if diff:
+            raise SystemExit(f"[{kind}] {out_dir} was created with different settings {diff}.\n"
+                             f"Use another --out-dir name, or add --overwrite to start this run again.")
+    log = setup_run_logger(out_dir)
+    cfg = dict(kind=kind, created=datetime.now().isoformat(timespec="seconds"), sys=sys_.to_dict(),
+               exp=exp.to_dict(), args={k: (list(v) if isinstance(v, tuple) else v) for k, v in vars(args).items()},
+               versions=_versions())
+    cfg_path.write_text(json.dumps(cfg, indent=2, default=str), encoding="utf-8")
+    log.info(f"=== {kind} run start: out_dir={out_dir}")
+    log.info(f"exp={json.dumps(exp.to_dict(), default=str)}")
+    log.info(f"versions={json.dumps(cfg['versions'])}")
+    return log
