@@ -209,6 +209,18 @@ def stage_tables(out_dir, sys_, exp, log, quiet, plots):
 
 
 # ---------------------------------------------------------------------------
+def warn_bound_samples(sys_, exp) -> None:
+    """The DEP lower bound subtracts 2*eps_M; if that exceeds the search margin, PSO
+    solutions (which sit at xi_req + margin) can never pass the bound check."""
+    from common.assessment import eps_dkw
+    for label, M in (("assess", exp.assess_samples), ("label", exp.label_samples)):
+        two_eps = 2 * eps_dkw(sys_, M)
+        if two_eps >= sys_.xi_margin:
+            print(f"WARNING: {label}_samples={M} -> 2*eps_M={two_eps:.4f} >= search DEP margin "
+                  f"{sys_.xi_margin}: almost every allocation will FAIL the DEP bound check. "
+                  f"Use >= 100000 samples.")
+
+
 def dry_run(sys_, exp, stages, methods):
     nK_tr, nK_te = len(exp.k_train), len(exp.k_test)
     n_tr = exp.n_train_layouts * nK_tr * exp.cases_per_layout
@@ -245,6 +257,7 @@ def main() -> int:
     out_dir = resolve_run_dir(args.out_dir, f"baseline_{args.preset}")
     stages = parse_stages(args.stage)
     methods = list(args.methods) if args.methods else list(BASELINE_METHODS)
+    warn_bound_samples(sys_, exp)
     if args.dry_run:
         dry_run(sys_, exp, stages, methods)
         return 0

@@ -32,11 +32,11 @@ Phan cong thiet bi:
 ------------------------------------------------------------------
 2. SMOKE TEST - chay pipeline sieu nho (~vai phut) de bat loi som. CHAY CAI NAY TRUOC.
 ------------------------------------------------------------------
-  python baseline_code/run_baseline.py --preset quick --stage all --out-dir smoke_bl --n-train-layouts 2 --n-val-layouts 1 --n-test-layouts 1 --cases-per-layout 2 --replicates 1 --search-samples 2000 --assess-samples 5000 --label-samples 5000 --budget-full 300 --budgets-val 150 --epochs 5
+  python baseline_code/run_baseline.py --preset quick --stage all --out-dir smoke_bl2 --n-train-layouts 2 --n-val-layouts 1 --n-test-layouts 1 --cases-per-layout 2 --replicates 1 --search-samples 2000 --assess-samples 100000 --label-samples 100000 --budget-full 300 --budgets-val 150 --epochs 5
 
-  python Quantummodel_code/run_quantum.py --preset quick --stage all --baseline-dir smoke_bl --out-dir smoke_q --n-train-layouts 2 --n-val-layouts 1 --n-test-layouts 1 --cases-per-layout 2 --replicates 1 --search-samples 2000 --assess-samples 5000 --label-samples 5000 --budget-full 300 --budgets-val 150 --epochs 5
+  python Quantummodel_code/run_quantum.py --preset quick --stage all --baseline-dir smoke_bl2 --out-dir smoke_q2 --n-train-layouts 2 --n-val-layouts 1 --n-test-layouts 1 --cases-per-layout 2 --replicates 1 --search-samples 2000 --assess-samples 100000 --label-samples 100000 --budget-full 300 --budgets-val 150 --epochs 5
 
-  python make_report.py --baseline-dir smoke_bl --quantum-dir smoke_q --out-dir smoke_cmp
+  python make_report.py --baseline-dir smoke_bl2 --quantum-dir smoke_q2 --out-dir smoke_cmp2
 
   So lieu smoke KHONG co y nghia khoa hoc, chi de xem code chay het khong loi.
   GUI LAI: neu loi -> toan bo traceback; neu chay het -> dong cuoi moi lenh.
@@ -47,43 +47,43 @@ Phan cong thiet bi:
 3. BASELINE preset quick
 ------------------------------------------------------------------
   Xem ke hoach + uoc tinh thoi gian (khong chay):
-  python baseline_code/run_baseline.py --preset quick --stage all --out-dir bl_quick_01 --dry-run
+  python baseline_code/run_baseline.py --preset quick --stage all --out-dir bl_quick_02 --dry-run
 
   Chay het (cases -> labels -> train -> validate -> test -> tables):
-  python baseline_code/run_baseline.py --preset quick --stage all --out-dir bl_quick_01
+  python baseline_code/run_baseline.py --preset quick --stage all --out-dir bl_quick_02
 
   Hoac tung stage:
-  python baseline_code/run_baseline.py --preset quick --stage cases,labels --out-dir bl_quick_01
-  python baseline_code/run_baseline.py --preset quick --stage train        --out-dir bl_quick_01
-  python baseline_code/run_baseline.py --preset quick --stage validate     --out-dir bl_quick_01
-  python baseline_code/run_baseline.py --preset quick --stage test,tables  --out-dir bl_quick_01
+  python baseline_code/run_baseline.py --preset quick --stage cases,labels --out-dir bl_quick_02
+  python baseline_code/run_baseline.py --preset quick --stage train        --out-dir bl_quick_02
+  python baseline_code/run_baseline.py --preset quick --stage validate     --out-dir bl_quick_02
+  python baseline_code/run_baseline.py --preset quick --stage test,tables  --out-dir bl_quick_02
 
   Ve lai bang/hinh tu CSV co san:
-  python baseline_code/run_baseline.py --preset quick --stage tables --out-dir bl_quick_01
+  python baseline_code/run_baseline.py --preset quick --stage tables --out-dir bl_quick_02
 
-  GUI LAI: result/bl_quick_01/run.log, result/bl_quick_01/tables/ (tat ca), result/bl_quick_01/figures/,
-           result/bl_quick_01/validation/selected_budget.json
+  GUI LAI: result/bl_quick_02/run.log, result/bl_quick_02/tables/ (tat ca), result/bl_quick_02/figures/,
+           result/bl_quick_02/validation/selected_budget.json
 
 
 ------------------------------------------------------------------
-4. QPSO preset quick (dung lai cases/models/budget cua bl_quick_01)
+4. QPSO preset quick (dung lai cases/models/budget cua bl_quick_02)
 ------------------------------------------------------------------
-  python Quantummodel_code/run_quantum.py --preset quick --stage all --baseline-dir bl_quick_01 --out-dir q_quick_01 --dry-run
-  python Quantummodel_code/run_quantum.py --preset quick --stage all --baseline-dir bl_quick_01 --out-dir q_quick_01
+  python Quantummodel_code/run_quantum.py --preset quick --stage all --baseline-dir bl_quick_02 --out-dir q_quick_02 --dry-run
+  python Quantummodel_code/run_quantum.py --preset quick --stage all --baseline-dir bl_quick_02 --out-dir q_quick_02
 
   stage validate: duong QPSO theo budget + luoi anchor_w0 x anchor_frac (3x3) CHI tren validation
                   -> validation/selected_anchor.json
   Tuy chon: --beta-start 1.0 --beta-end 0.5 --boundary reflect|clip --anchor-gate/--no-anchor-gate
             --anchor-w0 X --anchor-frac Y (ghi de gia tri chon tu validation)
 
-  GUI LAI: result/q_quick_01/run.log, tables/, figures/, validation/selected_anchor.json
+  GUI LAI: result/q_quick_02/run.log, tables/, figures/, validation/selected_anchor.json
 
 
 ------------------------------------------------------------------
 5. SO SANH PSO vs QPSO
 ------------------------------------------------------------------
-  python make_report.py --baseline-dir bl_quick_01 --quantum-dir q_quick_01 --out-dir cmp_quick_01
-  GUI LAI: result/cmp_quick_01/tables/ (dac biet table4_paired.csv), figures/
+  python make_report.py --baseline-dir bl_quick_02 --quantum-dir q_quick_02 --out-dir cmp_quick_02
+  GUI LAI: result/cmp_quick_02/tables/ (dac biet table4_paired.csv), figures/
 
 
 ------------------------------------------------------------------
@@ -91,8 +91,8 @@ Phan cong thiet bi:
 ------------------------------------------------------------------
   Phu thuoc: baseline cases->labels->train->validate  ==> moi chay duoc QPSO va baseline test.
   Sau khi baseline xong stage validate, mo 2 terminal chay CUNG LUC, chia core:
-    Terminal 1: python baseline_code/run_baseline.py --preset quick --stage test,tables --out-dir bl_quick_01 --workers 8
-    Terminal 2: python Quantummodel_code/run_quantum.py --preset quick --stage all --baseline-dir bl_quick_01 --out-dir q_quick_01 --workers 8
+    Terminal 1: python baseline_code/run_baseline.py --preset quick --stage test,tables --out-dir bl_quick_02 --workers 8
+    Terminal 2: python Quantummodel_code/run_quantum.py --preset quick --stage all --baseline-dir bl_quick_02 --out-dir q_quick_02 --workers 8
   (tong --workers cua 2 terminal <= so core - 1). Ca hai xong -> chay make_report.
   Luu y: chay song song lam cot Time(ms) bi nhieu; khi can so thoi gian cho bai, chay rieng tung cai.
 
@@ -131,5 +131,5 @@ Phan cong thiet bi:
   - Bi ngat: chay lai DUNG lenh cu -> resume theo nhom (layout, K).
   - Doi tham so quan trong (seed, so mau, so layout...) ma giu ten cu -> bi chan; doi ten --out-dir hoac them --overwrite.
   - Ghi console ra file: <lenh> > log_console.txt 2>&1
-  - Nen ket qua de gui: Compress-Archive result\bl_quick_01 bl_quick_01.zip
+  - Nen ket qua de gui: Compress-Archive result\bl_quick_02 bl_quick_02.zip
 === HET ===

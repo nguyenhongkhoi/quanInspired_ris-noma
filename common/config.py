@@ -201,8 +201,10 @@ class ExpConfig:
 
 
 PRESETS: dict[str, dict] = {
+    # assess/label samples stay at 1e5 in every preset: the DKW DEP bound subtracts
+    # 2*eps_M (0.0187 at M=1e5, 0.0418 at M=2e4) and must stay below the 0.03 search margin.
     "quick": dict(n_train_layouts=6, n_val_layouts=3, n_test_layouts=4, cases_per_layout=4,
-                  replicates=2, search_samples=4000, assess_samples=20000, label_samples=20000),
+                  replicates=2, search_samples=4000, assess_samples=100000, label_samples=100000),
     "medium": dict(n_train_layouts=16, n_val_layouts=8, n_test_layouts=20, cases_per_layout=8,
                    replicates=3, search_samples=10000, assess_samples=100000, label_samples=100000),
     "paper": dict(n_train_layouts=32, n_val_layouts=16, n_test_layouts=40, cases_per_layout=8,
