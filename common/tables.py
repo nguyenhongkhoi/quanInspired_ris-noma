@@ -456,8 +456,8 @@ def fig5_rate_vs_time(df: pd.DataFrame, exp: ExpConfig, fig_dir: Path) -> None:
             g = d[d["method"] == m]
             per = g.groupby("layout_id")["gated"].mean()
             lo, hi = boot_ci(per.values, exp.bootstrap_n, exp.bootstrap_seed)
-            y = g["gated"].mean()
-            a.errorbar(g["time_ms"].mean(), y, yerr=[[y - lo], [hi - y]], fmt=MARKERS.get(m, "o"),
+            y = float(per.mean())                       # same statistic as the bootstrap
+            a.errorbar(g["time_ms"].mean(), y, yerr=[[max(0.0, y - lo)], [max(0.0, hi - y)]], fmt=MARKERS.get(m, "o"),
                        color=COLORS.get(m), capsize=3, label=name(m))
         a.set_xscale("log")
         a.set_xlabel("Mean allocation time (ms; log scale)")
@@ -481,8 +481,9 @@ def fig6_cv(cvt: pd.DataFrame, fig_dir: Path) -> None:
         x = np.arange(len(groups)) + (i - (len(meths) - 1) / 2) * w
         for a, col, lo, hi in ((ax[0], "Pass(%)", "pass_lo", "pass_hi"), (ax[1], "R_gated", "gated_lo", "gated_hi")):
             y = g[col].values
+            err = np.nan_to_num(np.vstack([y - g[lo].values, g[hi].values - y]), nan=0.0)
             a.bar(x, y, w, color=COLORS.get(m), label=name(m),
-                  yerr=[y - g[lo].values, g[hi].values - y], capsize=2, ecolor="k", error_kw=dict(lw=0.6))
+                  yerr=np.maximum(err, 0.0), capsize=2, ecolor="k", error_kw=dict(lw=0.6))
     lay = cvt.groupby("CVgroup")["layouts"].max().reindex(groups).fillna(0).astype(int)
     for a in ax:
         a.set_xticks(range(len(groups)))
@@ -526,8 +527,8 @@ def fig_paired(pt: pd.DataFrame, fig_dir: Path, stem: str = "fig_paired_diff") -
     fig, ax = plt.subplots(figsize=(8, 0.45 * len(pt) + 1.2))
     lab = [f"K={r.K}: {r.A} - {r.B}" for r in pt.itertuples()]
     y = np.arange(len(pt))[::-1]
-    ax.errorbar(pt["diff_gated"], y, xerr=[pt["diff_gated"] - pt["ci_low"], pt["ci_high"] - pt["diff_gated"]],
-                fmt="o", color="k", capsize=3)
+    xerr = np.maximum(np.vstack([pt["diff_gated"] - pt["ci_low"], pt["ci_high"] - pt["diff_gated"]]), 0.0)
+    ax.errorbar(pt["diff_gated"], y, xerr=xerr, fmt="o", color="k", capsize=3)
     ax.axvline(0, color="r", lw=0.8)
     ax.set_yticks(y)
     ax.set_yticklabels(lab, fontsize=7)
@@ -576,6 +577,9 @@ def fig_anchor_grid(val: pd.DataFrame, fig_dir: Path) -> None:
 # ---------------------------------------------------------------------------
 # Orchestration
 # ---------------------------------------------------------------------------
+CSV_ONLY = {"table_anytime.csv"}   # long tables: CSV + tables.md only, not printed to console
+
+
 def write_tables(out_dir: Path, tables: dict[str, pd.DataFrame], titles: dict[str, str], quiet: bool = False) -> None:
     tdir = out_dir / "tables"
     tdir.mkdir(parents=True, exist_ok=True)
@@ -586,7 +590,7 @@ def write_tables(out_dir: Path, tables: dict[str, pd.DataFrame], titles: dict[st
         df.to_csv(tdir / fname, index=False)
         txt = f"## {titles.get(fname, fname)}\n\n`{fname}`\n\n{to_markdown(df)}\n"
         md.append(txt)
-        if not quiet:
+        if not quiet and fname not in CSV_ONLY:
             print(f"\n=== {titles.get(fname, fname)} ({fname}) ===")
             with pd.option_context("display.max_columns", 30, "display.width", 200, "display.precision", 4):
                 print(df.to_string(index=False))
