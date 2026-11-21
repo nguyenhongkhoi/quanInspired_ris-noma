@@ -1,0 +1,37 @@
+# Chỉ đưa lên máy chạy những gì cần để chạy code:
+#   common/  baseline_code/  Quantummodel_code/  sanity_check.py  make_report.py
+#   requirements.txt  command.txt  .gitignore
+
+# --- Tài liệu / bàn giao chỉ dùng trên máy code ---
+source_paper/
+claude.md
+CLAUDE.md
+Promt_phien_sau.txt
+promt_phien_sau.txt
+PROGRESS.md
+.claude/
+
+# --- Output: do máy chạy sinh ra, chép thủ công về, không commit ---
+result/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+
+# --- Môi trường ảo ---
+.venv/
+venv/
+env/
+.env
+
+# --- Editor / OS ---
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+Desktop.ini
+.DS_Store

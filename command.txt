@@ -1,0 +1,121 @@
+=== HUONG DAN CHAY — quanInspired_ris-noma (tren MAY CHAY) ===
+Cap nhat: 2026-11-21
+
+Trang thai lenh:
+  [SAN SANG]  code da viet, chay duoc ngay
+  [CHUA CO]   code chua viet — lenh ghi truoc de biet quy trinh, chay se bao loi
+
+Moi lenh chay tu thu muc goc du an (thu muc chua sanity_check.py).
+--out-dir chi la TEN run -> output nam o ./result/<ten>.
+Moi run mot ten rieng (vd. bl_quick_01, bl_quick_02...). Chay lai cung ten = resume.
+
+
+------------------------------------------------------------------
+0. CAI DAT (mot lan)                                       [SAN SANG]
+------------------------------------------------------------------
+  python --version                      (khuyen nghi 3.12; toi thieu 3.10)
+  nvidia-smi                            (xem Driver Version: cu130 can >= 580, cu128 can >= 570.26)
+  python -m venv .venv
+  .venv\Scripts\activate                (Windows; Linux/Mac: source .venv/bin/activate)
+  python -m pip install --upgrade pip
+  pip install -r requirements.txt
+  pip install -r requirements-gpu.txt   (PyTorch CUDA cho RTX 5060 Ti)
+    - neu driver < 580: sua dong index trong requirements-gpu.txt thanh .../whl/cu128
+    - chi CPU: pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+  Kiem tra nhanh:
+  python -c "import numpy, scipy, pandas, matplotlib; print('ok')"
+  python -c "import torch; print(torch.__version__, torch.version.cuda, torch.cuda.is_available(), torch.cuda.get_device_name(0))"
+    ky vong: ... True NVIDIA GeForce RTX 5060 Ti
+  GUI LAI 3 dong tren (python --version, nvidia-smi dong Driver, dong torch).
+
+
+------------------------------------------------------------------
+1. SANITY CHECK — buoc bat buoc dau tien                   [SAN SANG]
+------------------------------------------------------------------
+  python sanity_check.py --out-dir sanity
+  python sanity_check.py --out-dir sanity --fast          (may cham: bank nho hon)
+
+  Output : ./result/sanity/sanity.csv
+  Ma thoat: 0 = khong co FAIL, 1 = co FAIL
+  GUI LAI: toan bo dong PASS/FAIL/WARN/INFO + dong tom tat cuoi.
+
+
+------------------------------------------------------------------
+2. BASELINE (bai goc: PSO, MLP, GNN)                         [CHUA CO]
+------------------------------------------------------------------
+  Xem ke hoach, so trial, uoc tinh thoi gian (khong chay):
+  python baseline_code/run_baseline.py --preset quick --stage all --out-dir bl_quick_01 --dry-run
+
+  Chay het pipeline preset quick (vai phut):
+  python baseline_code/run_baseline.py --preset quick --stage all --out-dir bl_quick_01
+
+  Chay tung stage (thu tu: cases -> labels -> train -> validate -> test -> tables):
+  python baseline_code/run_baseline.py --preset quick --stage cases,labels --out-dir bl_quick_01
+  python baseline_code/run_baseline.py --preset quick --stage train        --out-dir bl_quick_01
+  python baseline_code/run_baseline.py --preset quick --stage validate     --out-dir bl_quick_01
+  python baseline_code/run_baseline.py --preset quick --stage test,tables  --out-dir bl_quick_01
+
+  Ve lai bang/hinh tu CSV co san (khong chay lai thi nghiem):
+  python baseline_code/run_baseline.py --preset quick --stage tables --out-dir bl_quick_01
+
+  Quy mo lon hon:
+  python baseline_code/run_baseline.py --preset medium --stage all --out-dir bl_medium_01 --workers 8
+  python baseline_code/run_baseline.py --preset paper  --stage all --out-dir bl_paper_01  --workers 8
+
+  GUI LAI: result/<ten>/run.log, result/<ten>/tables/*.csv, result/<ten>/figures/
+
+
+------------------------------------------------------------------
+3. QUANTUM-INSPIRED (QPSO) — dung lai cases/labels/models cua baseline   [CHUA CO]
+------------------------------------------------------------------
+  python Quantummodel_code/run_quantum.py --preset quick --stage all --baseline-dir bl_quick_01 --out-dir q_quick_01 --dry-run
+  python Quantummodel_code/run_quantum.py --preset quick --stage all --baseline-dir bl_quick_01 --out-dir q_quick_01
+
+  Tuy chon QPSO (mac dinh trong ngoac):
+    --beta-start 1.0 --beta-end 0.5 --boundary reflect|clip
+    --anchor-w0 0.5 --anchor-frac 0.3 --anchor-gate / --no-anchor-gate
+
+  Quy mo paper:
+  python Quantummodel_code/run_quantum.py --preset paper --stage all --baseline-dir bl_paper_01 --out-dir q_paper_01 --workers 8
+
+  GUI LAI: result/<ten>/run.log, tables/*.csv, figures/
+
+
+------------------------------------------------------------------
+4. SO SANH PSO vs QPSO                                       [CHUA CO]
+------------------------------------------------------------------
+  python make_report.py --baseline-dir bl_quick_01 --quantum-dir q_quick_01 --out-dir cmp_quick_01
+  python make_report.py --baseline-dir bl_paper_01 --quantum-dir q_paper_01 --out-dir cmp_paper_01 --ref gnn_pso
+
+  GUI LAI: result/<ten>/tables/*.csv, tables.md, figures/
+
+
+------------------------------------------------------------------
+5. TUY CHON CHUNG (run_baseline.py, run_quantum.py)
+------------------------------------------------------------------
+  --preset quick|medium|paper        --stage all | cases,labels,train,validate,test,tables
+  --out-dir TEN                      --methods m1,m2,...
+  --k-train 2,3,4,5                  --k-test 2,3,4,5,6
+  --n-train-layouts N  --n-val-layouts N  --n-test-layouts N  --cases-per-layout N
+  --replicates R
+  --search-samples M  --assess-samples M  --label-samples M
+  --swarm 30  --budget-full 1800  --budget-short B  --budgets-val 150,300,450
+  --epochs 200  --batch-size 32  --lr 1e-3
+  --workers W  (mac dinh = so core - 1)     --seed 2026
+  --overwrite  (mac dinh la resume)         --no-plots  --quiet  --dry-run  --log-every N
+
+  Method keys:
+    baseline: full_pso rand_pso direct_mlp direct_gnn mlp_pso gnn_pso
+    quantum : full_qpso rand_qpso mlp_qpso gnn_qpso gnn_aqpso
+
+
+------------------------------------------------------------------
+6. MEO
+------------------------------------------------------------------
+  - Bi ngat giua chung: chay lai DUNG lenh cu (cung --out-dir) -> tu resume.
+  - Muon chay lai tu dau: them --overwrite, hoac doi ten --out-dir.
+  - Lenh se chay lau: ghi output ra file de gui lai:
+      python sanity_check.py --out-dir sanity > sanity_console.txt 2>&1
+  - Nen nen thu muc ket qua de gui: Compress-Archive result\bl_quick_01 bl_quick_01.zip
+=== HET ===
