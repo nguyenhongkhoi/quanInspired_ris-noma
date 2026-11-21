@@ -279,22 +279,44 @@ def table8_adjust(val: pd.DataFrame | None) -> pd.DataFrame:
 
 
 def anytime_curves(df: pd.DataFrame, swarm: int) -> pd.DataFrame:
-    """Mean search-bank best feasible R_b (infeasible -> 0) versus evaluations."""
+    """Mean search-bank best feasible R_b (infeasible -> 0) versus evaluations, per K group."""
     rows = []
-    for m in methods_in(df):
-        g = df[(df["method"] == m) & (df["hist_rb"].fillna("") != "")]
-        if g.empty:
+    kgs = sorted(df["Kgroup"].unique(), key=lambda s: (len(s), s)) if "Kgroup" in df.columns else ["all"]
+    for kg in kgs:
+        dk = df[df["Kgroup"] == kg] if kg != "all" else df
+        for m in methods_in(dk):
+            g = dk[(dk["method"] == m) & (dk["hist_rb"].fillna("") != "")]
+            if g.empty:
+                continue
+            H = [json.loads(h) for h in g["hist_rb"]]
+            T = max(len(h) for h in H)
+            A = np.zeros((len(H), T))
+            for i, h in enumerate(H):
+                v = np.array([0.0 if x is None else x for x in h])
+                A[i, :len(v)] = v
+                A[i, len(v):] = v[-1]
+            mean = A.mean(axis=0)
+            for t in range(T):
+                rows.append(dict(K=kg, key=m, Method=name(m), evals=(t + 1) * swarm, mean_best_rb_search=mean[t]))
+    return pd.DataFrame(rows)
+
+
+def anytime_target(at: pd.DataFrame, full_key: str = "full_pso", frac: float = 0.99) -> pd.DataFrame:
+    """Evaluations each method needs to reach frac x (Full reference final value), per K group."""
+    if at.empty or full_key not in set(at["key"]):
+        return pd.DataFrame()
+    rows = []
+    for kg, d in at.groupby("K", sort=False):
+        f = d[d["key"] == full_key]
+        if f.empty:
             continue
-        H = [json.loads(h) for h in g["hist_rb"]]
-        T = max(len(h) for h in H)
-        A = np.zeros((len(H), T))
-        for i, h in enumerate(H):
-            v = np.array([0.0 if x is None else x for x in h])
-            A[i, :len(v)] = v
-            A[i, len(v):] = v[-1]
-        mean = A.mean(axis=0)
-        for t in range(T):
-            rows.append(dict(key=m, Method=name(m), evals=(t + 1) * swarm, mean_best_rb_search=mean[t]))
+        target = frac * f["mean_best_rb_search"].iloc[-1]
+        for m in list(dict.fromkeys(d["key"])):
+            g = d[d["key"] == m]
+            hit = g[g["mean_best_rb_search"] >= target]
+            rows.append(dict(K=kg, Method=name(m), key=m, target=target,
+                             evals_to_target=int(hit["evals"].iloc[0]) if not hit.empty else None,
+                             final_evals=int(g["evals"].iloc[-1]), final_value=g["mean_best_rb_search"].iloc[-1]))
     return pd.DataFrame(rows)
 
 
@@ -541,17 +563,22 @@ def fig_anytime(at: pd.DataFrame, fig_dir: Path, full_key: str = "full_pso") -> 
     if at.empty:
         return
     plt = _plt()
-    fig, ax = plt.subplots(figsize=(7, 4))
-    for m in list(dict.fromkeys(at["key"])):
-        g = at[at["key"] == m]
-        ax.plot(g["evals"], g["mean_best_rb_search"], color=COLORS.get(m), label=name(m))
-    if full_key in set(at["key"]):
-        tgt = 0.99 * at[at["key"] == full_key]["mean_best_rb_search"].iloc[-1]
-        ax.axhline(tgt, color="k", ls=":", lw=1, label=f"99% of {name(full_key)} final")
-    ax.set_xscale("log")
-    ax.set_xlabel("Objective evaluations (log)")
-    ax.set_ylabel("Mean best feasible R_b on search bank")
-    ax.legend(fontsize=7)
+    groups = list(dict.fromkeys(at["K"]))
+    fig, axs = plt.subplots(1, len(groups), figsize=(6.5 * len(groups), 4), squeeze=False)
+    for ax, kg in zip(axs[0], groups):
+        d = at[at["K"] == kg]
+        for m in list(dict.fromkeys(d["key"])):
+            g = d[d["key"] == m]
+            ls = "--" if m.endswith("qpso") else "-"
+            ax.plot(g["evals"], g["mean_best_rb_search"], color=COLORS.get(m), ls=ls, label=name(m))
+        if full_key in set(d["key"]):
+            tgt = 0.99 * d[d["key"] == full_key]["mean_best_rb_search"].iloc[-1]
+            ax.axhline(tgt, color="k", ls=":", lw=1, label=f"99% of {name(full_key)} final")
+        ax.set_xscale("log")
+        ax.set_xlabel("Objective evaluations (log)")
+        ax.set_ylabel("Mean best feasible R_b on search bank")
+        ax.set_title(f"K = {kg}")
+    axs[0][-1].legend(fontsize=7)
     fig.suptitle("Anytime curves (search-bank objective; infeasible = 0)")
     _save(fig, fig_dir, "fig_anytime")
 
@@ -634,6 +661,9 @@ def make_all(out_dir: Path, sys_: SysConfig, exp: ExpConfig, test: pd.DataFrame 
         at = anytime_curves(test, exp.swarm) if "hist_rb" in test.columns else pd.DataFrame()
         if not at.empty:
             put("table_anytime.csv", at, "Anytime curves (search bank)")
+            fk = "full_pso" if "full_pso" in set(at["key"]) else "full_qpso"
+            put("table_anytime_target.csv", anytime_target(at, fk),
+                f"Evaluations to reach 99% of {name(fk)} final search objective")
     write_tables(out_dir, T, titles, quiet=quiet)
     if log:
         log.info(f"tables written: {sorted(k for k, v in T.items() if v is not None and not v.empty)}")
