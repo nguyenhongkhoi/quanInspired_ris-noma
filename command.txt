@@ -14,19 +14,19 @@ Moi run mot ten rieng (vd. bl_quick_01, bl_quick_02...). Chay lai cung ten = res
 0. CAI DAT (mot lan)                                       [SAN SANG]
 ------------------------------------------------------------------
   python --version                      (khuyen nghi 3.12; toi thieu 3.10)
-  nvidia-smi                            (xem Driver Version: cu130 can >= 580, cu128 can >= 570.26)
+  nvidia-smi                            (xem Driver Version: cu128 can >= 570; 560.x thi dung cu126)
   python -m venv .venv
   .venv\Scripts\activate                (Windows; Linux/Mac: source .venv/bin/activate)
   python -m pip install --upgrade pip
   pip install -r requirements.txt
-  pip install -r requirements-gpu.txt   (PyTorch CUDA cho RTX 5060 Ti)
-    - neu driver < 580: sua dong index trong requirements-gpu.txt thanh .../whl/cu128
+  pip install -r requirements-gpu.txt   (PyTorch CUDA cho RTX 4090)
+    - neu driver < 570: sua dong index trong requirements-gpu.txt thanh .../whl/cu126
     - chi CPU: pip install torch --index-url https://download.pytorch.org/whl/cpu
 
   Kiem tra nhanh:
   python -c "import numpy, scipy, pandas, matplotlib; print('ok')"
   python -c "import torch; print(torch.__version__, torch.version.cuda, torch.cuda.is_available(), torch.cuda.get_device_name(0))"
-    ky vong: ... True NVIDIA GeForce RTX 5060 Ti
+    ky vong: ... True NVIDIA GeForce RTX 4090
   GUI LAI 3 dong tren (python --version, nvidia-smi dong Driver, dong torch).
 
 

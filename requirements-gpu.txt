@@ -1,18 +1,18 @@
-# PyTorch có CUDA cho RTX 5060 Ti (Blackwell, sm_120).
+# PyTorch có CUDA cho RTX 4090 (Ada Lovelace, sm_89).
 # Cài SAU requirements.txt:
 #     pip install -r requirements.txt
 #     pip install -r requirements-gpu.txt
 #
 # Ghi chú:
-# - Blackwell (sm_120) cần PyTorch >= 2.7, build với CUDA >= 12.8.
-#   Bản cu126 trở xuống KHÔNG chạy được trên dòng RTX 50.
-# - Index cu130 cần driver NVIDIA R580 trở lên. Nếu driver cũ hơn mà không
-#   muốn cập nhật thì đổi dòng index bên dưới thành .../whl/cu128 (cần driver >= 570.26).
+# - sm_89 được mọi bản CUDA hiện hành hỗ trợ (cu118 ... cu130). Chọn cu128 vì ổn định
+#   và hợp với driver phổ biến: cần driver NVIDIA >= 570.
+# - Driver cũ hơn (560.x): đổi dòng index thành .../whl/cu126.
+#   Driver mới (>= 580) dùng .../whl/cu130 cũng được.
 # - File này chỉ chứa torch, vì --index-url áp dụng cho cả file. numpy/scipy/...
 #   vẫn cài từ PyPI qua requirements.txt.
 # - Kiểm tra sau khi cài:
 #     python -c "import torch; print(torch.__version__, torch.version.cuda, torch.cuda.is_available(), torch.cuda.get_device_name(0))"
-#   Kỳ vọng: True và "NVIDIA GeForce RTX 5060 Ti".
+#   Kỳ vọng: True và "NVIDIA GeForce RTX 4090".
 
---index-url https://download.pytorch.org/whl/cu130
+--index-url https://download.pytorch.org/whl/cu128
 torch>=2.7
