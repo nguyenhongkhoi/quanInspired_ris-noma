@@ -4,7 +4,7 @@
 # Stops at the first failing step. Re-running resumes finished (layout, K) groups.
 # Uses the baseline run bl_paper_01 of THIS machine (baseline is not re-run).
 
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Continue"   # failures are detected via $LASTEXITCODE below
 Set-Location -Path $PSScriptRoot
 
 function Invoke-Step([string]$name, [string[]]$cmd) {
