@@ -76,6 +76,16 @@ def add_quantum_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--anchor-frac", type=float, default=None)
     p.add_argument("--anchor-gate", dest="anchor_gate", action="store_true", default=None)
     p.add_argument("--no-anchor-gate", dest="anchor_gate", action="store_false")
+    p.add_argument("--k-val", type=_int_list, default=None,
+                   help="K values of validation cases (default = k_train); e.g. 2,3,4,5,6 to tune for unseen K")
+    p.add_argument("--qq-mbest", choices=("mean", "rank", "feas_rank"), default=None,
+                   help="force gnn_qqpso component F instead of the validation choice")
+    p.add_argument("--qq-beta", choices=("linear", "feas"), default=None,
+                   help="force gnn_qqpso component B instead of the validation choice")
+    p.add_argument("--qq-polish", type=int, default=None,
+                   help="force gnn_qqpso component P (polish populations) instead of the validation choice")
+    p.add_argument("--qq-polish-grid", type=_int_list, default=None,
+                   help="polish_pops values tried on validation (default 0,1,2)")
 
 
 def parse_stages(text: str) -> list[str]:
@@ -100,7 +110,7 @@ def exp_config_from_args(args: argparse.Namespace) -> ExpConfig:
         lr=args.lr, seed=args.seed, device=args.device,
         workers=args.workers if args.workers is not None else default_workers(),
     )
-    for name in ("beta_start", "beta_end", "boundary", "anchor_w0", "anchor_frac", "anchor_gate"):
+    for name in ("beta_start", "beta_end", "boundary", "anchor_w0", "anchor_frac", "anchor_gate", "k_val"):
         if hasattr(args, name):
             ov[name] = getattr(args, name)
     return exp_from_preset(args.preset, **ov)
@@ -142,7 +152,7 @@ def load_exp_config(run_dir: Path) -> ExpConfig:
     if not p.exists():
         raise SystemExit(f"missing {p}: run that stage first")
     d = json.loads(p.read_text(encoding="utf-8"))["exp"]
-    for k in ("k_train", "k_test", "budgets_val", "train_seeds", "pso_seeds"):
+    for k in ("k_train", "k_test", "k_val", "budgets_val", "train_seeds", "pso_seeds"):
         if k in d and d[k] is not None:
             d[k] = tuple(d[k])
     known = set(ExpConfig.__dataclass_fields__)

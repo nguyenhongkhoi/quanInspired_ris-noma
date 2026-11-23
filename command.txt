@@ -123,6 +123,20 @@ Phan cong thiet bi:
   Method keys:
     baseline: full_pso rand_pso direct_mlp direct_gnn mlp_pso gnn_pso
     quantum : full_qpso rand_qpso mlp_qpso gnn_qpso gnn_aqpso
+    qq-qpso : gnn_qqpso gnn_qqpso_noF gnn_qqpso_noB gnn_qqpso_noP   (branch feat/qpso-qq)
+
+  Rieng run_quantum.py (gnn_qqpso):
+    --k-val 2,3,4,5,6        them K=6 vao validation (chi de chon tham so search; GNN khong train K=6)
+    --qq-polish-grid 0,1,2   cac gia tri polish thu tren validation
+    --qq-mbest mean|rank|feas_rank  --qq-beta linear|feas  --qq-polish N   (ep cau hinh, bo qua selected_qq.json)
+
+  Vi du QQ-QPSO (go TUNG LENH MOT):
+    git fetch origin
+    git checkout feat/qpso-qq
+    git pull
+    python Quantummodel_code/run_quantum.py --preset quick --stage all --baseline-dir bl_quick_02 --out-dir qq_quick_01 --methods gnn_qpso,gnn_qqpso,gnn_qqpso_noF,gnn_qqpso_noB,gnn_qqpso_noP --k-val 2,3,4,5,6 --budgets-val 150
+    python Quantummodel_code/run_quantum.py --preset paper --stage all --baseline-dir bl_paper_01 --out-dir qq_paper_01 --methods gnn_qpso,gnn_qqpso,gnn_qqpso_noF,gnn_qqpso_noB,gnn_qqpso_noP --k-val 2,3,4,5,6 --budgets-val 150
+    python make_report.py --baseline-dir bl_paper_01 --quantum-dir qq_paper_01 --out-dir cmp_qq_paper_01
 
 
 ------------------------------------------------------------------

@@ -24,7 +24,10 @@ from common.config import SysConfig  # noqa: E402
 from common.progress import setup_run_logger  # noqa: E402
 from common.tables import load_csv, make_all  # noqa: E402
 
-DEFAULT_PAIRS = "gnn_qpso:gnn_pso,gnn_aqpso:gnn_pso,rand_qpso:rand_pso,full_qpso:full_pso,gnn_aqpso:gnn_qpso"
+DEFAULT_PAIRS = ("gnn_qpso:gnn_pso,gnn_aqpso:gnn_pso,rand_qpso:rand_pso,full_qpso:full_pso,gnn_aqpso:gnn_qpso,"
+                 "gnn_qqpso:gnn_pso,gnn_qqpso:gnn_qpso,gnn_qqpso:gnn_qqpso_noF,gnn_qqpso:gnn_qqpso_noB,"
+                 "gnn_qqpso:gnn_qqpso_noP")
+GRID_METHODS = ("gnn_aqpso", "gnn_qqpso")   # validation rows with a tag are grid points
 
 
 def main() -> int:
@@ -66,10 +69,15 @@ def main() -> int:
         p = d / "validation" / "val_trials.csv"
         if p.exists():
             v = load_csv(p)
-            vals.append(v[v["method"] != "gnn_aqpso"])
+            vals.append(v[~(v["method"].isin(GRID_METHODS) & (v["tag"].astype(str) != ""))])
     val = pd.concat(vals, ignore_index=True) if vals else None
 
     pairs = [tuple(p.split(":")) for p in args.pairs.split(",") if p.strip()]
+    present = set(test["method"])
+    dropped = [p for p in pairs if p[0] not in present or p[1] not in present]
+    pairs = [p for p in pairs if p not in dropped]
+    if dropped:
+        log.info(f"pairs skipped (method not in either run): {dropped}")
     cases_p = bdir / "cases" / "cases_test.csv"
     make_all(out_dir, SysConfig(), bexp, test, val, labels_dir=bdir / "labels", models_dir=bdir / "models",
              cases=pd.read_csv(cases_p) if cases_p.exists() else None, ref=args.ref, pairs=pairs,

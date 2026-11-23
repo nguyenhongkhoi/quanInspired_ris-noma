@@ -164,6 +164,9 @@ class ExpConfig:
     label_samples: int = 20000
     k_train: tuple[int, ...] = (2, 3, 4, 5)
     k_test: tuple[int, ...] = (2, 3, 4, 5, 6)
+    # K values of the VALIDATION cases used by run_quantum.py (None -> k_train, as in the paper).
+    # Adding an unseen K here only tunes search parameters; the networks never train on it.
+    k_val: tuple[int, ...] | None = None
     swarm: int = 30
     budget_full: int = 1800
     budget_short: int | None = None  # None -> read from selected_budget.json
@@ -194,6 +197,7 @@ class ExpConfig:
 
     @property
     def K_max(self) -> int:
+        # k_val is deliberately NOT included: layouts must stay identical to the baseline run.
         return max(max(self.k_train), max(self.k_test))
 
     def to_dict(self) -> dict:
