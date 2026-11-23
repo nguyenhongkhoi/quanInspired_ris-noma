@@ -145,6 +145,18 @@ Phan cong thiet bi:
     python Quantummodel_code/run_quantum.py --preset paper --stage test,tables --baseline-dir bl_paper_01 --out-dir qqp_paper_01 --methods gnn_qpso,gnn_qqpso,gnn_pso_p --qq-mbest mean --qq-beta linear --qq-polish 2
     python make_report.py --baseline-dir bl_paper_01 --quantum-dir qqp_paper_01 --out-dir cmp_qqp_paper_01
 
+  QW-QPSO (branch feat/qpso-qwell): W = gieng luong tu quanh du doan GNN, B = lich beta cho budget ngan, + P
+    git fetch origin
+    git checkout feat/qpso-qwell
+    git pull
+    (quick, vai phut)
+    python Quantummodel_code/run_quantum.py --preset quick --stage all --baseline-dir bl_quick_02 --out-dir qw_quick_01 --methods gnn_qwqpso,gnn_qwqpso_noW,gnn_qwqpso_noB --k-val 2,3,4,5,6 --budgets-val 150
+    (paper: 1) validate luoi 42 o, 2) test, 3) report)
+    python Quantummodel_code/run_quantum.py --preset paper --stage validate --baseline-dir bl_paper_01 --out-dir qw_paper_01 --methods gnn_qwqpso --k-val 2,3,4,5,6 --budgets-val 150
+    python Quantummodel_code/run_quantum.py --preset paper --stage test,tables --baseline-dir bl_paper_01 --out-dir qw_paper_01 --methods gnn_qwqpso,gnn_qwqpso_noW,gnn_qwqpso_noB,gnn_qqpso,gnn_pso_p --k-val 2,3,4,5,6 --budgets-val 150 --qq-mbest mean --qq-beta linear --qq-polish 2
+    python make_report.py --baseline-dir bl_paper_01 --quantum-dir qw_paper_01 --out-dir cmp_qw_paper_01
+    (rut ngan validate ~1/2: them --qw-polish-grid 2)
+
 
 ------------------------------------------------------------------
 9. MEO

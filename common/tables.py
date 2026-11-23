@@ -26,10 +26,11 @@ COLORS = {
     "gnn_aqpso": "#e7298a", "direct_mlp_raw": "#c6dbef", "direct_gnn_raw": "#fdd0a2",
     "gnn_qqpso": "#006d2c", "gnn_qqpso_noF": "#74c476", "gnn_qqpso_noB": "#a1d99b", "gnn_qqpso_noP": "#c7e9c0",
     "gnn_pso_p": "#fd8d3c",
+    "gnn_qwqpso": "#08306b", "gnn_qwqpso_noW": "#6baed6", "gnn_qwqpso_noB": "#9ecae1",
 }
 MARKERS = {"full_pso": "s", "rand_pso": "o", "direct_mlp": "v", "direct_gnn": "^", "mlp_pso": "D",
            "gnn_pso": "*", "full_qpso": "P", "rand_qpso": "X", "mlp_qpso": "d", "gnn_qpso": "h",
-           "gnn_aqpso": "p", "gnn_qqpso": "H", "gnn_qqpso_noF": "<", "gnn_qqpso_noB": ">", "gnn_qqpso_noP": "8", "gnn_pso_p": "*"}
+           "gnn_aqpso": "p", "gnn_qqpso": "H", "gnn_qqpso_noF": "<", "gnn_qqpso_noB": ">", "gnn_qqpso_noP": "8", "gnn_pso_p": "*", "gnn_qwqpso": "D", "gnn_qwqpso_noW": "<", "gnn_qwqpso_noB": ">"}
 
 
 # ---------------------------------------------------------------------------

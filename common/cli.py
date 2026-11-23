@@ -86,6 +86,13 @@ def add_quantum_args(p: argparse.ArgumentParser) -> None:
                    help="force gnn_qqpso component P (polish populations) instead of the validation choice")
     p.add_argument("--qq-polish-grid", type=_int_list, default=None,
                    help="polish_pops values tried on validation (default 0,1,2)")
+    p.add_argument("--qw-scale", type=float, default=None, help="force gnn_qwqpso well length L (z units)")
+    p.add_argument("--qw-frac", type=float, default=None, help="force gnn_qwqpso fraction of particles in the well")
+    p.add_argument("--qw-beta-start", type=float, default=None, help="force gnn_qwqpso beta_start")
+    p.add_argument("--qw-beta-end", type=float, default=None, help="force gnn_qwqpso beta_end")
+    p.add_argument("--qw-polish", type=int, default=None, help="force gnn_qwqpso polish populations")
+    p.add_argument("--qw-polish-grid", type=_int_list, default=None,
+                   help="polish_pops values tried for gnn_qwqpso on validation (default 1,2)")
 
 
 def parse_stages(text: str) -> list[str]:

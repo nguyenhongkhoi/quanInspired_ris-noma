@@ -26,6 +26,14 @@ OFF so that run_qpso(...) with defaults is exactly the plain QPSO above):
      Uses evaluations from the same budget (B = S*T unchanged), no extra draws.
      Implemented once in common/swarm.py (run_polish) and shared with PSO (gnn_pso_p).
 
+gnn_qwqpso adds a QPSO-specific initialisation:
+  W  well_scale=L, well_frac=f: particles 1..round(f*(S-1)) are drawn from the QPSO
+     delta-potential-well distribution centred on the learned prediction z_hat:
+         z = z_hat +/- L * ln(1/u),  u ~ U(0,1], sign 1/2   (reflected into [0,1])
+     i.e. the same heavy-tailed law QPSO uses in its update, with the GNN output as the
+     attractor. Draws come from a SEPARATE stream (seed, WELL_STREAM) so the main rng
+     sequence is identical to gnn_qpso. Particle 0 stays exactly z_hat.
+
 Pairing: the initial swarm is drawn exactly like PSO (z then an unused velocity
 draw), so for a given seed QPSO and PSO start from the same 30 particles; all
 later draws are made in the same order with or without a learned particle.
@@ -38,6 +46,7 @@ from common.evaluator import Problem, rank_order
 from common.swarm import SearchResult, SwarmMemory, check_budget, run_polish
 
 MBEST_MODES = ("mean", "rank", "feas_rank")
+WELL_STREAM = 7919                      # sub-stream id for component W (keeps main rng aligned)
 BETA_MODES = ("linear", "feas")
 
 
@@ -73,6 +82,7 @@ def run_qpso(problem: Problem, budget: int, swarm: int, seed: int,
              anchor_z: np.ndarray | None = None, anchor_w0: float = 0.0,
              anchor_frac: float = 0.0, anchor_gate: bool = True,
              mbest_mode: str = "mean", beta_mode: str = "linear", polish_pops: int = 0,
+             well_scale: float = 0.0, well_frac: float = 0.0,
              v_init: float = 0.1, **_unused) -> SearchResult:
     assert boundary in ("reflect", "clip")
     assert mbest_mode in MBEST_MODES, mbest_mode
@@ -88,6 +98,14 @@ def run_qpso(problem: Problem, budget: int, swarm: int, seed: int,
     if init_z is not None:
         init_z = np.asarray(init_z, float).reshape(D)
         z[0] = init_z
+        n_well = int(round(float(well_frac) * (S - 1))) if well_scale > 0.0 else 0
+        assert 0 <= n_well <= S - 1, n_well
+        if n_well > 0:                                    # component W: quantum-well initialisation
+            rng_w = np.random.default_rng([int(seed), WELL_STREAM])
+            u_w = 1.0 - rng_w.random((n_well, D))          # (0, 1]
+            s_w = np.where(rng_w.random((n_well, D)) < 0.5, -1.0, 1.0)
+            z[1:1 + n_well] = _boundary(init_z[None, :] + s_w * float(well_scale) * np.log(1.0 / u_w), boundary)
+            assert z.shape == (S, D) and np.all((z >= 0) & (z <= 1))
     ev = problem.evaluate_z(z)
     init_feas = bool(ev.feasible[0]) if init_z is not None else None
     mem = SwarmMemory(problem, archive_size)

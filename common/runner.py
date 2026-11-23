@@ -232,9 +232,12 @@ def trial_group(task: dict) -> list[dict]:
                     init_z = alloc_to_z(sys_, pred[0], pred[1], pred[2][None, :])[0] if pred else None
                     kw = {}
                     if spec.optimizer == "qpso":
-                        kw.update(beta_start=exp.beta_start, beta_end=exp.beta_end, boundary=exp.boundary,
+                        kw.update(beta_start=exp.beta_start if spec.beta_start is None else spec.beta_start,
+                                  beta_end=exp.beta_end if spec.beta_end is None else spec.beta_end,
+                                  boundary=exp.boundary,
                                   mbest_mode=spec.mbest_mode, beta_mode=spec.beta_mode,
-                                  polish_pops=spec.polish_pops)
+                                  polish_pops=spec.polish_pops,
+                                  well_scale=spec.well_scale, well_frac=spec.well_frac)
                     elif spec.optimizer == "pso" and spec.polish_pops:
                         kw.update(polish_pops=spec.polish_pops)
                     if spec.anchored:
@@ -269,6 +272,9 @@ def trial_group(task: dict) -> list[dict]:
                     time_ms=time_ms, infer_ms=infer_ms,
                     anchor_w0=spec.anchor_w0, anchor_frac=spec.anchor_frac,
                     qq_mbest=spec.mbest_mode, qq_beta=spec.beta_mode, qq_polish=spec.polish_pops,
+                    qw_scale=spec.well_scale, qw_frac=spec.well_frac,
+                    qw_bs=spec.beta_start if spec.beta_start is not None else exp.beta_start,
+                    qw_be=spec.beta_end if spec.beta_end is not None else exp.beta_end,
                     hist_rb=json.dumps(hist) if hist is not None else "",
                 )
                 rows.append(row)

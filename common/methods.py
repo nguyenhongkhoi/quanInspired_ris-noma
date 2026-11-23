@@ -21,6 +21,9 @@ DISPLAY = {
     "gnn_qqpso_noB": "GNN + QQ-QPSO w/o B",
     "gnn_qqpso_noP": "GNN + QQ-QPSO w/o P",
     "gnn_pso_p": "GNN + short PSO + P",
+    "gnn_qwqpso": "GNN + QW-QPSO",
+    "gnn_qwqpso_noW": "GNN + QW-QPSO w/o W",
+    "gnn_qwqpso_noB": "GNN + QW-QPSO w/o B",
     # diagnostics (validation only, Table VIII): raw predictions, delta = 0
     "direct_mlp_raw": "Direct pooled MLP (raw)",
     "direct_gnn_raw": "Direct GNN (raw)",
@@ -35,6 +38,10 @@ QQ_OFF = dict(mbest_mode="mean", beta_mode="linear", polish_pops=0)
 # Fairness control: PSO (Algorithm 1) + the same component P as gnn_qqpso (polish_pops taken
 # from the selected gnn_qqpso config, NOT tuned separately). Answers "is the gain from P or QPSO?".
 POLISH_METHODS = ("gnn_pso_p",)
+# gnn_qwqpso: QPSO-specific components on top of P: W (quantum-well initialisation around the
+# GNN prediction) + B (short-budget beta schedule). Config chosen on validation (run_quantum.py).
+QW_METHODS = ("gnn_qwqpso", "gnn_qwqpso_noW", "gnn_qwqpso_noB")
+QW_OFF = dict(well_scale=0.0, well_frac=0.0, beta_start=None, beta_end=None, polish_pops=0)
 
 # key -> (optimizer, init, budget kind, anchored)
 _TABLE = {
@@ -56,6 +63,9 @@ _TABLE = {
     "gnn_qqpso_noB": ("qpso", "gnn", "short", False),
     "gnn_qqpso_noP": ("qpso", "gnn", "short", False),
     "gnn_pso_p": ("pso", "gnn", "short", False),
+    "gnn_qwqpso": ("qpso", "gnn", "short", False),
+    "gnn_qwqpso_noW": ("qpso", "gnn", "short", False),
+    "gnn_qwqpso_noB": ("qpso", "gnn", "short", False),
 }
 
 _OPTIMIZERS = {"pso": ("baseline_code.pso", "run_pso"),
@@ -75,7 +85,11 @@ class MethodSpec:
     anchor_frac: float = 0.0
     mbest_mode: str = "mean"     # QQ component F ("feas_rank") — QPSO only
     beta_mode: str = "linear"    # QQ component B ("feas")      — QPSO only
-    polish_pops: int = 0         # QQ component P (>0)          — QPSO only
+    polish_pops: int = 0         # component P (>0)             — QPSO, and PSO for gnn_pso_p
+    well_scale: float = 0.0      # QW component W: well length L (z units)
+    well_frac: float = 0.0       # QW component W: fraction of the S-1 random particles drawn in the well
+    beta_start: float | None = None   # QW component B: per-method beta schedule (None -> exp default)
+    beta_end: float | None = None
 
     @property
     def seed_branch(self) -> str:
@@ -95,9 +109,18 @@ def qq_ablation(key: str, qq: dict) -> dict:
     return out
 
 
+def qw_ablation(key: str, qw: dict) -> dict:
+    out = dict(QW_OFF, **qw)
+    if key == "gnn_qwqpso_noW":
+        out["well_scale"], out["well_frac"] = 0.0, 0.0
+    elif key == "gnn_qwqpso_noB":
+        out["beta_start"], out["beta_end"] = None, None
+    return out
+
+
 def make_spec(key: str, budget_short: int, budget_full: int, delta: float,
               anchor_w0: float = 0.0, anchor_frac: float = 0.0, tag: str = "",
-              qq: dict | None = None) -> MethodSpec:
+              qq: dict | None = None, qw: dict | None = None) -> MethodSpec:
     if key not in _TABLE:
         raise KeyError(f"unknown method {key!r}; known: {sorted(_TABLE)}")
     opt, init, kind, anch = _TABLE[key]
@@ -112,9 +135,20 @@ def make_spec(key: str, budget_short: int, budget_full: int, delta: float,
         q["polish_pops"] = int(qq["polish_pops"])      # PSO has no mbest/beta: only P is shared
     elif qq:
         raise ValueError(f"qq configuration given for non-QQ method {key!r}")
+    w = dict(QW_OFF)
+    if key in QW_METHODS:
+        assert qw is not None, f"{key} needs a qw configuration (well_scale, well_frac, beta_*, polish_pops)"
+        w = qw_ablation(key, qw)
+        q["polish_pops"] = int(w["polish_pops"])
+    elif qw:
+        raise ValueError(f"qw configuration given for non-QW method {key!r}")
+    bs = None if w["beta_start"] is None else float(w["beta_start"])
+    be = None if w["beta_end"] is None else float(w["beta_end"])
+    assert (bs is None) == (be is None), "beta_start and beta_end must be set together"
     return MethodSpec(key, int(budget), opt, init, d, anch, tag,
                       anchor_w0 if anch else 0.0, anchor_frac if anch else 0.0,
-                      str(q["mbest_mode"]), str(q["beta_mode"]), int(q["polish_pops"]))
+                      str(q["mbest_mode"]), str(q["beta_mode"]), int(q["polish_pops"]),
+                      float(w["well_scale"]), float(w["well_frac"]), bs, be)
 
 
 def get_optimizer(name: str):

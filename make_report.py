@@ -26,8 +26,10 @@ from common.tables import load_csv, make_all  # noqa: E402
 
 DEFAULT_PAIRS = ("gnn_qpso:gnn_pso,gnn_aqpso:gnn_pso,rand_qpso:rand_pso,full_qpso:full_pso,gnn_aqpso:gnn_qpso,"
                  "gnn_qqpso:gnn_pso,gnn_qqpso:gnn_qpso,gnn_qqpso:gnn_qqpso_noF,gnn_qqpso:gnn_qqpso_noB,"
-                 "gnn_qqpso:gnn_qqpso_noP,gnn_pso_p:gnn_pso,gnn_qqpso:gnn_pso_p")
-GRID_METHODS = ("gnn_aqpso", "gnn_qqpso")   # validation rows with a tag are grid points
+                 "gnn_qqpso:gnn_qqpso_noP,gnn_pso_p:gnn_pso,gnn_qqpso:gnn_pso_p,"
+                 "gnn_qwqpso:gnn_pso,gnn_qwqpso:gnn_pso_p,gnn_qwqpso:gnn_qqpso,"
+                 "gnn_qwqpso:gnn_qwqpso_noW,gnn_qwqpso:gnn_qwqpso_noB")
+GRID_METHODS = ("gnn_aqpso", "gnn_qqpso", "gnn_qwqpso")   # validation rows with a tag are grid points
 
 
 def main() -> int:
