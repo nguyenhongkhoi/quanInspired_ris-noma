@@ -25,7 +25,7 @@ from common.cli import (CRITICAL_KEYS, add_common_args, add_quantum_args,  # noq
                         exp_config_from_args, init_run, load_exp_config, parse_stages,
                         resolve_run_dir)
 from common.config import SysConfig  # noqa: E402
-from common.methods import QQ_METHODS, QQ_OFF, QUANTUM_METHODS, make_spec  # noqa: E402
+from common.methods import POLISH_METHODS, QQ_METHODS, QQ_OFF, QUANTUM_METHODS, make_spec  # noqa: E402
 from common.runner import run_trial_stage  # noqa: E402
 
 # Quick run (2026-11-21) selected (0.75, 0.5) = upper corner of the 3x3 grid -> grid extended.
@@ -217,7 +217,7 @@ def stage_test(out_dir, bdir, sys_, exp, methods, args, log, quiet, overwrite):
     log.info(f"[test] budget_short={B} anchor_w0={w0} anchor_frac={fr} gate={exp.anchor_gate} "
              f"beta={exp.beta_start}->{exp.beta_end} boundary={exp.boundary}")
     specs = []
-    qq = selected_qq(out_dir, args) if any(m in QQ_METHODS for m in methods) else None
+    qq = selected_qq(out_dir, args) if any(m in QQ_METHODS + POLISH_METHODS for m in methods) else None
     if qq is not None:
         log.info(f"[test] gnn_qqpso config {qq}")
         if not quiet:
@@ -233,10 +233,12 @@ def stage_test(out_dir, bdir, sys_, exp, methods, args, log, quiet, overwrite):
                     print(msg)
                 continue
             specs.append(sp)
+        elif k in POLISH_METHODS:
+            specs.append(make_spec(k, B, exp.budget_full, exp.delta_adjust, qq=qq))
         else:
             specs.append(make_spec(k, B, exp.budget_full, exp.delta_adjust, anchor_w0=w0, anchor_frac=fr))
     run_trial_stage(sys_, exp, read_cases(bdir, "test"), specs, bdir / "models", out_dir / "test" / "trials.csv",
-                    "test", [m for m in ("gnn_qpso", "gnn_aqpso", "gnn_qqpso", "full_qpso") if m in methods],
+                    "test", [m for m in ("gnn_qpso", "gnn_aqpso", "gnn_qqpso", "gnn_pso_p", "full_qpso") if m in methods],
                     quiet, log, overwrite)
 
 
@@ -255,7 +257,7 @@ def stage_tables(out_dir, bdir, sys_, exp, log, quiet, plots):
     pairs = [("gnn_qpso", "rand_qpso"), ("gnn_qpso", "mlp_qpso"), ("gnn_qpso", "full_qpso"),
              ("gnn_aqpso", "gnn_qpso"), ("gnn_aqpso", "rand_qpso"),
              ("gnn_qqpso", "gnn_qpso"), ("gnn_qqpso", "gnn_qqpso_noF"), ("gnn_qqpso", "gnn_qqpso_noB"),
-             ("gnn_qqpso", "gnn_qqpso_noP")]
+             ("gnn_qqpso", "gnn_qqpso_noP"), ("gnn_qqpso", "gnn_pso_p")]
     pairs = [(a, b) for a, b in pairs if a in present and b in present]
     make_all(out_dir, sys_, exp, test, val, labels_dir=None, models_dir=bdir / "models", cases=cases,
              ref="gnn_qpso", pairs=pairs, plots=plots, optimizer_name="QPSO", quiet=quiet, log=log)

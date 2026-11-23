@@ -138,6 +138,13 @@ Phan cong thiet bi:
     python Quantummodel_code/run_quantum.py --preset paper --stage all --baseline-dir bl_paper_01 --out-dir qq_paper_01 --methods gnn_qpso,gnn_qqpso,gnn_qqpso_noF,gnn_qqpso_noB,gnn_qqpso_noP --k-val 2,3,4,5,6 --budgets-val 150
     python make_report.py --baseline-dir bl_paper_01 --quantum-dir qq_paper_01 --out-dir cmp_qq_paper_01
 
+  Doi chung cong bang PSO + P (branch feat/pso-polish), cau hinh P ep theo validation (P=2):
+    git fetch origin
+    git checkout feat/pso-polish
+    git pull
+    python Quantummodel_code/run_quantum.py --preset paper --stage test,tables --baseline-dir bl_paper_01 --out-dir qqp_paper_01 --methods gnn_qpso,gnn_qqpso,gnn_pso_p --qq-mbest mean --qq-beta linear --qq-polish 2
+    python make_report.py --baseline-dir bl_paper_01 --quantum-dir qqp_paper_01 --out-dir cmp_qqp_paper_01
+
 
 ------------------------------------------------------------------
 9. MEO

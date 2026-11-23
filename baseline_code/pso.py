@@ -2,21 +2,27 @@
 
 Pairing rule (claude.md 5.6): all random draws are made in the same order whether
 or not an initial particle is supplied; the learned particle only overwrites z[0].
+
+polish_pops (default 0 = Algorithm 1 of the paper, unchanged): the last n populations
+of the budget run component P (common/swarm.py run_polish, the same code as QPSO's P).
+Only used by the fairness control gnn_pso_p; inertia schedule spans the T-1-n updates.
 """
 from __future__ import annotations
 
 import numpy as np
 
 from common.evaluator import Problem
-from common.swarm import SearchResult, SwarmMemory, check_budget
+from common.swarm import SearchResult, SwarmMemory, check_budget, run_polish
 
 
 def run_pso(problem: Problem, budget: int, swarm: int, seed: int,
             init_z: np.ndarray | None = None, archive_size: int = 0,
             c1: float = 1.5, c2: float = 1.5, w_start: float = 0.9, w_end: float = 0.4,
-            v_init: float = 0.1, v_max: float = 0.25, **_unused) -> SearchResult:
+            v_init: float = 0.1, v_max: float = 0.25, polish_pops: int = 0, **_unused) -> SearchResult:
     S = int(swarm)
     T = check_budget(budget, S)
+    polish_pops = int(polish_pops)
+    assert 0 <= polish_pops <= T - 1, f"polish_pops={polish_pops} needs budget > {polish_pops}*swarm"
     D = problem.K + 1
     rng = np.random.default_rng(seed)
     z = rng.random((S, D))
@@ -29,8 +35,9 @@ def run_pso(problem: Problem, budget: int, swarm: int, seed: int,
     init_feas = bool(ev.feasible[0]) if init_z is not None else None
     mem = SwarmMemory(problem, archive_size)
     mem.init(z, ev)
-    ws = np.linspace(w_start, w_end, T - 1) if T > 1 else np.array([])
-    for t in range(T - 1):
+    n_upd = T - 1 - polish_pops
+    ws = np.linspace(w_start, w_end, n_upd) if n_upd > 0 else np.array([])
+    for t in range(n_upd):
         r1 = rng.random((S, D))
         r2 = rng.random((S, D))
         g = mem.gbest_z()
@@ -39,4 +46,7 @@ def run_pso(problem: Problem, budget: int, swarm: int, seed: int,
         z = np.clip(z + v, 0.0, 1.0)
         ev = problem.evaluate_z(z)
         mem.update(z, ev)
-    return mem.result(n_evals=S * T, init_feasible=init_feas)
+    run_polish(problem, mem, S, polish_pops)
+    res = mem.result(n_evals=S * T, init_feasible=init_feas)
+    assert len(res.history_best_rb) == T
+    return res

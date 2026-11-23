@@ -24,6 +24,7 @@ OFF so that run_qpso(...) with defaults is exactly the plain QPSO above):
      scans [z_b, 1] if gbest is feasible (push m_b up) or [0, z_b) if not (pull
      m_b down to regain feasibility); later populations refine +/- one grid step.
      Uses evaluations from the same budget (B = S*T unchanged), no extra draws.
+     Implemented once in common/swarm.py (run_polish) and shared with PSO (gnn_pso_p).
 
 Pairing: the initial swarm is drawn exactly like PSO (z then an unused velocity
 draw), so for a given seed QPSO and PSO start from the same 30 particles; all
@@ -34,7 +35,7 @@ from __future__ import annotations
 import numpy as np
 
 from common.evaluator import Problem, rank_order
-from common.swarm import SearchResult, SwarmMemory, check_budget
+from common.swarm import SearchResult, SwarmMemory, check_budget, run_polish
 
 MBEST_MODES = ("mean", "rank", "feas_rank")
 BETA_MODES = ("linear", "feas")
@@ -64,33 +65,6 @@ def _mbest(mem: SwarmMemory, mode: str) -> np.ndarray:
     out = (w[:, None] * mem.pz[order]).sum(axis=0)
     assert out.shape == (mem.pz.shape[1],)
     return out
-
-
-def _polish_population(mem: SwarmMemory, S: int, step: float | None) -> tuple[np.ndarray, float]:
-    """One batched line-search population on z_b around gbest. Returns (Z, next step)."""
-    gi = mem.gbest_index()
-    g = mem.pz[gi].copy()
-    zb = float(g[0])
-    if step is None:                                      # first polish population: directional scan
-        if bool(mem.pf[gi]) and zb < 1.0 - 1e-9:
-            grid = zb + (1.0 - zb) * np.arange(1, S + 1) / S
-            nxt = (1.0 - zb) / S
-        elif (not bool(mem.pf[gi])) and zb > 1e-9:
-            grid = zb * np.arange(0, S) / S
-            nxt = zb / S
-        else:                                             # at the box edge: symmetric local scan
-            nxt = 1.0 / S
-            grid = np.clip(zb + np.linspace(-nxt * S / 2, nxt * S / 2, S), 0.0, 1.0)
-    else:                                                 # refinement: +/- one previous grid step
-        grid = np.clip(zb + np.linspace(-step, step, S), 0.0, 1.0)
-        nxt = 2.0 * step / max(S - 1, 1)
-    # clip: zb + (1 - zb) * S / S can exceed 1 by one ulp in floating point
-    grid = np.clip(np.asarray(grid, dtype=float), 0.0, 1.0)
-    assert grid.shape == (S,), grid.shape
-    Z = np.repeat(g[None, :], S, axis=0)
-    Z[:, 0] = grid
-    assert Z.shape == mem.pz.shape and np.all((Z >= 0) & (Z <= 1))
-    return Z, float(nxt)
 
 
 def run_qpso(problem: Problem, budget: int, swarm: int, seed: int,
@@ -147,11 +121,7 @@ def run_qpso(problem: Problem, budget: int, swarm: int, seed: int,
         ev = problem.evaluate_z(z)
         mem.update(z, ev)
 
-    step = None
-    for _k in range(polish_pops):
-        Z, step = _polish_population(mem, S, step)
-        ev = problem.evaluate_z(Z)
-        mem.update(Z, ev)
+    run_polish(problem, mem, S, polish_pops)    # component P (common/swarm.py, shared with PSO)
 
     res = mem.result(n_evals=S * T, init_feasible=init_feas)
     assert len(res.history_best_rb) == T

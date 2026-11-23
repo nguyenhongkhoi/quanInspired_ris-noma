@@ -20,6 +20,7 @@ DISPLAY = {
     "gnn_qqpso_noF": "GNN + QQ-QPSO w/o F",
     "gnn_qqpso_noB": "GNN + QQ-QPSO w/o B",
     "gnn_qqpso_noP": "GNN + QQ-QPSO w/o P",
+    "gnn_pso_p": "GNN + short PSO + P",
     # diagnostics (validation only, Table VIII): raw predictions, delta = 0
     "direct_mlp_raw": "Direct pooled MLP (raw)",
     "direct_gnn_raw": "Direct GNN (raw)",
@@ -31,6 +32,9 @@ QUANTUM_METHODS = ("full_qpso", "rand_qpso", "mlp_qpso", "gnn_qpso", "gnn_aqpso"
 # + P (m_b line-search polish); configuration chosen on validation (run_quantum.py).
 QQ_METHODS = ("gnn_qqpso", "gnn_qqpso_noF", "gnn_qqpso_noB", "gnn_qqpso_noP")
 QQ_OFF = dict(mbest_mode="mean", beta_mode="linear", polish_pops=0)
+# Fairness control: PSO (Algorithm 1) + the same component P as gnn_qqpso (polish_pops taken
+# from the selected gnn_qqpso config, NOT tuned separately). Answers "is the gain from P or QPSO?".
+POLISH_METHODS = ("gnn_pso_p",)
 
 # key -> (optimizer, init, budget kind, anchored)
 _TABLE = {
@@ -51,6 +55,7 @@ _TABLE = {
     "gnn_qqpso_noF": ("qpso", "gnn", "short", False),
     "gnn_qqpso_noB": ("qpso", "gnn", "short", False),
     "gnn_qqpso_noP": ("qpso", "gnn", "short", False),
+    "gnn_pso_p": ("pso", "gnn", "short", False),
 }
 
 _OPTIMIZERS = {"pso": ("baseline_code.pso", "run_pso"),
@@ -102,6 +107,9 @@ def make_spec(key: str, budget_short: int, budget_full: int, delta: float,
     if key in QQ_METHODS:
         assert qq is not None, f"{key} needs a qq configuration (mbest_mode, beta_mode, polish_pops)"
         q = qq_ablation(key, qq)
+    elif key in POLISH_METHODS:
+        assert qq is not None, f"{key} needs the selected polish_pops (qq configuration)"
+        q["polish_pops"] = int(qq["polish_pops"])      # PSO has no mbest/beta: only P is shared
     elif qq:
         raise ValueError(f"qq configuration given for non-QQ method {key!r}")
     return MethodSpec(key, int(budget), opt, init, d, anch, tag,

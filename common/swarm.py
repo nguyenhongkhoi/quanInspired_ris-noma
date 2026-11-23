@@ -102,6 +102,47 @@ class SwarmMemory:
                             history_best_feas=self.hist_feas)
 
 
+def polish_population(mem: SwarmMemory, S: int, step: float | None) -> tuple[np.ndarray, float]:
+    """Component P: one batched line-search population on z_b (covert fraction) around gbest.
+
+    Shared by PSO and QPSO (same code -> fair comparison). Other coordinates of gbest are kept.
+    First population (step=None): scan [z_b, 1] if gbest is feasible (push m_b up), else
+    [0, z_b) (pull m_b down to regain feasibility). Later populations: +/- one previous grid step.
+    Returns (Z of shape (S, D), next step). Uses no random numbers.
+    """
+    gi = mem.gbest_index()
+    g = mem.pz[gi].copy()
+    zb = float(g[0])
+    if step is None:
+        if bool(mem.pf[gi]) and zb < 1.0 - 1e-9:
+            grid = zb + (1.0 - zb) * np.arange(1, S + 1) / S
+            nxt = (1.0 - zb) / S
+        elif (not bool(mem.pf[gi])) and zb > 1e-9:
+            grid = zb * np.arange(0, S) / S
+            nxt = zb / S
+        else:                                             # at the box edge: symmetric local scan
+            nxt = 1.0 / S
+            grid = zb + np.linspace(-nxt * S / 2, nxt * S / 2, S)
+    else:
+        grid = zb + np.linspace(-step, step, S)
+        nxt = 2.0 * step / max(S - 1, 1)
+    # clip: zb + (1 - zb) * S / S can exceed 1 by one ulp in floating point
+    grid = np.clip(np.asarray(grid, dtype=float), 0.0, 1.0)
+    assert grid.shape == (S,), grid.shape
+    Z = np.repeat(g[None, :], S, axis=0)
+    Z[:, 0] = grid
+    assert Z.shape == mem.pz.shape and np.all((Z >= 0) & (Z <= 1))
+    return Z, float(nxt)
+
+
+def run_polish(problem: Problem, mem: SwarmMemory, S: int, n_pops: int) -> None:
+    """Spend the last n_pops populations of the budget on polish_population (updates mem)."""
+    step = None
+    for _ in range(int(n_pops)):
+        Z, step = polish_population(mem, S, step)
+        mem.update(Z, problem.evaluate_z(Z))
+
+
 def check_budget(budget: int, swarm: int) -> int:
     assert budget >= swarm and budget % swarm == 0, f"budget {budget} must be a multiple of swarm {swarm}"
     return budget // swarm
