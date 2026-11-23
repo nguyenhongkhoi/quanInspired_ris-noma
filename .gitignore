@@ -35,3 +35,6 @@ env/
 Thumbs.db
 Desktop.ini
 .DS_Store
+
+# --- SSH notes (local only: user names / IPs) ---
+ssh_setup.txt
