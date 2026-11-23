@@ -53,8 +53,10 @@ def main() -> None:
     ap.add_argument("--baseline-dir", default="bl_paper_01")
     ap.add_argument("--quantum-dir", default="qw_paper_01")
     ap.add_argument("--out-dir", default="cmp_qw_paper_01")
-    ap.add_argument("--k-unseen", type=int, default=6)
+    ap.add_argument("--k-train", default="2,3,4,5", help="K values the networks were trained on")
     args = ap.parse_args()
+    k_train = [int(v) for v in args.k_train.split(",") if v.strip()]
+    trained_lab = f"{min(k_train)}-{max(k_train)}"
 
     tb = load_csv(run_dir(args.baseline_dir) / "test" / "trials.csv")
     tq = load_csv(run_dir(args.quantum_dir) / "test" / "trials.csv")
@@ -68,7 +70,8 @@ def main() -> None:
     (out / "tables").mkdir(parents=True, exist_ok=True)
 
     # ---- per-K summary ------------------------------------------------------
-    groups = [(str(k), [k]) for k in Ks] + [("2-5", [k for k in Ks if k != args.k_unseen])]
+    unseen = [k for k in Ks if k not in k_train]
+    groups = [(str(k), [k]) for k in Ks] + [(trained_lab, [k for k in Ks if k in k_train])]
     rows = []
     for gname, kk in groups:
         d = df[df["K"].isin(kk)]
@@ -106,7 +109,7 @@ def main() -> None:
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    fig, axs = plt.subplots(1, 3, figsize=(15, 4.3))
+    fig, axs = plt.subplots(1, 3, figsize=(15 + 0.6 * max(0, len(Ks) - 5), 4.3))
     x = np.arange(len(Ks))
     s = summ[summ["K"].isin([str(k) for k in Ks])]
     for ax, col, ylab in [(axs[0], "R_gated", r"$\hat R_{\rm gated}$ (bit/s/Hz)"),
@@ -115,8 +118,8 @@ def main() -> None:
             y = [float(s[(s["K"] == str(k)) & (s["method"] == m)][col].iloc[0]) for k in Ks]
             ax.plot(x, y, marker=MARK[m], color=COLOR[m], label=LABEL[m],
                     ls="--" if m == REF else "-", lw=2.2 if m == "gnn_qwqpso" else 1.5, ms=6)
-        if args.k_unseen in Ks:
-            i = Ks.index(args.k_unseen)
+        for k in unseen:
+            i = Ks.index(k)
             ax.axvspan(i - 0.4, i + 0.4, color="0.9", zorder=0)
             ax.text(i, ax.get_ylim()[0], "unseen K", ha="center", va="bottom", fontsize=8, color="0.3")
         ax.set_xticks(x, [str(k) for k in Ks])
@@ -128,7 +131,7 @@ def main() -> None:
     axs[0].legend(fontsize=8, loc="lower left")
 
     ax = axs[2]
-    glabels = [str(k) for k in Ks] + ["2-5"]
+    glabels = [str(k) for k in Ks] + [trained_lab]
     w = 0.36
     for j, (a, b) in enumerate(PAIRS):
         p = paired[(paired["a"] == a) & (paired["b"] == b)].set_index("K").loc[glabels]
@@ -144,7 +147,8 @@ def main() -> None:
     ax.legend(fontsize=8, loc="upper left")
     ax.grid(alpha=0.3, axis="y")
 
-    fig.suptitle("Same budget B = 150 evaluations, paired trials (RTX 4090 run)", fontsize=10)
+    b_short = int(df[df["method"] == "gnn_pso"]["budget"].mode().iloc[0])
+    fig.suptitle(f"Same budget B = {b_short} evaluations, paired trials", fontsize=10)
     fig.tight_layout()
     for ext in ("png", "pdf"):
         fig.savefig(out / "figures" / f"fig_qw_compare.{ext}", dpi=300)
