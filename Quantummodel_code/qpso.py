@@ -84,6 +84,9 @@ def _polish_population(mem: SwarmMemory, S: int, step: float | None) -> tuple[np
     else:                                                 # refinement: +/- one previous grid step
         grid = np.clip(zb + np.linspace(-step, step, S), 0.0, 1.0)
         nxt = 2.0 * step / max(S - 1, 1)
+    # clip: zb + (1 - zb) * S / S can exceed 1 by one ulp in floating point
+    grid = np.clip(np.asarray(grid, dtype=float), 0.0, 1.0)
+    assert grid.shape == (S,), grid.shape
     Z = np.repeat(g[None, :], S, axis=0)
     Z[:, 0] = grid
     assert Z.shape == mem.pz.shape and np.all((Z >= 0) & (Z <= 1))
