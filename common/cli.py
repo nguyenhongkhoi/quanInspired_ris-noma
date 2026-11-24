@@ -93,6 +93,8 @@ def add_quantum_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--qw-polish", type=int, default=None, help="force gnn_qwqpso polish populations")
     p.add_argument("--qw-polish-grid", type=_int_list, default=None,
                    help="polish_pops values tried for gnn_qwqpso on validation (default 1,2)")
+    p.add_argument("--prior-polish", type=int, default=None,
+                   help="polish populations for prior_qwqpso / prior_dqpso grids (default 1; 0 = pure swarm)")
     p.add_argument("--k-subset", type=_int_list, default=None,
                    help="run validate/test only on these K (cases filtered; k_test of the baseline run unchanged)")
 

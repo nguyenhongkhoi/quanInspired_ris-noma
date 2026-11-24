@@ -63,6 +63,12 @@ DPRIOR_S_GRID = (0.2, 0.5)
 DPRIOR_WELL_GRID = (0.05, 0.1, 0.2)
 DPRIOR_BETA_GRID = ((0.5, 0.25), (1.0, 0.5))
 DPRIOR_POLISH = 1
+# --prior-polish 0 (pure swarm, no boundary polish): the swarm must travel from the prior to the
+# boundary by itself, so the grid adds a wider well and a stronger contraction:
+# s {0.2, 0.5} x L {0.05, 0.1, 0.2, 0.4} x beta {0.5->0.25, 1.0->0.5, 1.0->0.25} = 24 cells per prior.
+NOPOL_S_GRID = (0.2, 0.5)
+NOPOL_WELL_GRID = (0.05, 0.1, 0.2, 0.4)
+NOPOL_BETA_GRID = ((0.5, 0.25), (1.0, 0.5), (1.0, 0.25))
 
 
 def prior_tag(s_: float, w: dict) -> str:
@@ -152,6 +158,9 @@ def stage_validate(out_dir, bdir, sys_, exp, methods, args, log, quiet, overwrit
     vdir.mkdir(parents=True, exist_ok=True)
     B_sel = baseline_budget(bdir, exp)
     T = B_sel // exp.swarm
+    pp_old = PRIOR_POLISH if args.prior_polish is None else int(args.prior_polish)
+    pp_d = DPRIOR_POLISH if args.prior_polish is None else int(args.prior_polish)
+    assert 0 <= pp_old <= T - 1 and 0 <= pp_d <= T - 1, (pp_old, pp_d, T)
     specs = []
     for B in exp.budgets_val:
         for k in ("rand_qpso", "mlp_qpso", "gnn_qpso"):
@@ -183,14 +192,18 @@ def stage_validate(out_dir, bdir, sys_, exp, methods, args, log, quiet, overwrit
             specs.append(make_spec("gnn_qwqpso", B_sel, exp.budget_full, exp.delta_adjust, tag=qw_tag(w), qw=w))
     use_prior = "prior_qwqpso" in methods
     if use_prior:
-        for s_, L, (bs, be) in itertools.product(PRIOR_S_GRID, PRIOR_WELL_GRID, PRIOR_BETA_GRID):
-            w = dict(well_scale=L, well_frac=1.0, beta_start=bs, beta_end=be, polish_pops=PRIOR_POLISH)
+        grids = ((NOPOL_S_GRID, NOPOL_WELL_GRID, NOPOL_BETA_GRID) if pp_old == 0
+                 else (PRIOR_S_GRID, PRIOR_WELL_GRID, PRIOR_BETA_GRID))
+        for s_, L, (bs, be) in itertools.product(*grids):
+            w = dict(well_scale=L, well_frac=1.0, beta_start=bs, beta_end=be, polish_pops=pp_old)
             specs.append(make_spec("prior_qwqpso", B_sel, exp.budget_full, exp.delta_adjust,
                                    tag=prior_tag(s_, w), qw=w, prior_s=s_))
     use_dprior = "prior_dqpso" in methods
     if use_dprior:
-        for s_, L, (bs, be) in itertools.product(DPRIOR_S_GRID, DPRIOR_WELL_GRID, DPRIOR_BETA_GRID):
-            w = dict(well_scale=L, well_frac=1.0, beta_start=bs, beta_end=be, polish_pops=DPRIOR_POLISH)
+        grids = ((NOPOL_S_GRID, NOPOL_WELL_GRID, NOPOL_BETA_GRID) if pp_d == 0
+                 else (DPRIOR_S_GRID, DPRIOR_WELL_GRID, DPRIOR_BETA_GRID))
+        for s_, L, (bs, be) in itertools.product(*grids):
+            w = dict(well_scale=L, well_frac=1.0, beta_start=bs, beta_end=be, polish_pops=pp_d)
             specs.append(make_spec("prior_dqpso", B_sel, exp.budget_full, exp.delta_adjust,
                                    tag=prior_tag(s_, w), qw=w, prior_s=s_))
     base_m = [m for m in PRIOR_BASE_METHODS + DPRIOR_BASE_METHODS if m in methods]
@@ -344,12 +357,12 @@ def stage_validate(out_dir, bdir, sys_, exp, methods, args, log, quiet, overwrit
         best = grid.sort_values(["passed", "gated", "qw_scale", "qw_bs"],
                                 ascending=[False, False, True, False]).iloc[0]
         sel = dict(prior_s=float(best["prior_s"]), well_scale=float(best["qw_scale"]), well_frac=1.0,
-                   beta_start=float(best["qw_bs"]), beta_end=float(best["qw_be"]), polish_pops=PRIOR_POLISH,
+                   beta_start=float(best["qw_bs"]), beta_end=float(best["qw_be"]), polish_pops=pp_old,
                    budget_short=B_sel, k_val=list(exp.k_val or exp.k_train),
                    passed=int(best["passed"]), trials=int(best["trials"]), gated=float(best["gated"]))
         (vdir / "selected_prior.json").write_text(json.dumps(sel, indent=2), encoding="utf-8")
         msg = (f"[validate] selected prior_qwqpso: s={sel['prior_s']:g} L={sel['well_scale']:g} "
-               f"beta=({sel['beta_start']:g}->{sel['beta_end']:g}) P={PRIOR_POLISH} "
+               f"beta=({sel['beta_start']:g}->{sel['beta_end']:g}) P={pp_old} "
                f"pass {sel['passed']}/{sel['trials']} gated {sel['gated']:.4f}")
         log.info(msg)
         log.info("prior grid:\n" + grid.to_string(index=False))
@@ -369,12 +382,12 @@ def stage_validate(out_dir, bdir, sys_, exp, methods, args, log, quiet, overwrit
         best = grid.sort_values(["passed", "gated", "qw_scale", "qw_bs", "prior_s"],
                                 ascending=[False, False, True, False, True]).iloc[0]
         sel = dict(prior_s=float(best["prior_s"]), well_scale=float(best["qw_scale"]), well_frac=1.0,
-                   beta_start=float(best["qw_bs"]), beta_end=float(best["qw_be"]), polish_pops=DPRIOR_POLISH,
+                   beta_start=float(best["qw_bs"]), beta_end=float(best["qw_be"]), polish_pops=pp_d,
                    budget_short=B_sel, k_val=list(exp.k_val or exp.k_train),
                    passed=int(best["passed"]), trials=int(best["trials"]), gated=float(best["gated"]))
         (vdir / "selected_dprior.json").write_text(json.dumps(sel, indent=2), encoding="utf-8")
         msg = (f"[validate] selected prior_dqpso: s={sel['prior_s']:g} L={sel['well_scale']:g} "
-               f"beta=({sel['beta_start']:g}->{sel['beta_end']:g}) P={DPRIOR_POLISH} "
+               f"beta=({sel['beta_start']:g}->{sel['beta_end']:g}) P={pp_d} "
                f"pass {sel['passed']}/{sel['trials']} gated {sel['gated']:.4f}")
         log.info(msg)
         log.info("dprior grid:\n" + grid.to_string(index=False))
