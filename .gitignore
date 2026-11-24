@@ -38,4 +38,7 @@ Desktop.ini
 
 # --- SSH notes (local only: user names / IPs) ---
 ssh_setup.txt
+setup_runner.ps1
+# --- local result dump pulled from runners ---
+ket_qua_csv/
 BAO_CAO_KET_QUA.md
