@@ -68,6 +68,6 @@ Invoke-Step "5/5 test Set A (K 2..6, config from Set B validation)" (@("Quantumm
 $zip = "prior_result.zip"
 Compress-Archive -Force -DestinationPath $zip -Path `
     "result\$OB\validation\prior_grid.csv", "result\$OB\validation\selected_prior.json", `
-    "result\$OB\tables", "result\$OA\tables", "result\$OB\test\trials.csv", "result\$OA\test\trials.csv", `
+    "result\$OB\tables", "result\$OA\tables", `
     "result\$OB\run.log", "result\$OA\run.log"
 Write-Status "=== ALL DONE. Result: $((Resolve-Path $zip).Path) ==="
