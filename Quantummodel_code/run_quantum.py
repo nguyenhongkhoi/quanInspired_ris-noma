@@ -25,8 +25,8 @@ from common.cli import (CRITICAL_KEYS, add_common_args, add_quantum_args,  # noq
                         exp_config_from_args, init_run, load_exp_config, parse_stages,
                         resolve_run_dir)
 from common.config import SysConfig  # noqa: E402
-from common.methods import (POLISH_METHODS, PRIOR_METHODS, PW_METHODS, QQ_METHODS, QQ_OFF,  # noqa: E402
-                            QUANTUM_METHODS, QW_METHODS, make_spec)
+from common.methods import (POLISH_METHODS, PRIOR_BASE_METHODS, PRIOR_METHODS, PW_METHODS,  # noqa: E402
+                            QQ_METHODS, QQ_OFF, QUANTUM_METHODS, QW_METHODS, make_spec)
 from common.runner import run_trial_stage  # noqa: E402
 
 # Quick run (2026-11-21) selected (0.75, 0.5) = upper corner of the 3x3 grid -> grid extended.
@@ -36,7 +36,8 @@ ANCHOR_FRAC_GRID = (0.2, 0.3, 0.5, 0.7)
 QQ_MBEST_GRID = ("mean", "feas_rank")
 QQ_BETA_GRID = ("linear", "feas")
 QQ_POLISH_GRID = (0, 1, 2)
-GRID_METHODS = ("gnn_aqpso", "gnn_qqpso", "gnn_qwqpso", "gnn_pso_wpt", "prior_qwqpso")   # validation rows of these keys are grid points
+GRID_METHODS = ("gnn_aqpso", "gnn_qqpso", "gnn_qwqpso", "gnn_pso_wpt", "prior_qwqpso", "prior_direct",
+                "prior_polish")   # validation rows of these keys are grid points
 # gnn_qwqpso validation grid: W (well_scale, well_frac) x B (beta_start, beta_end) x P (polish_pops).
 # (0, 0) = no well; (1.0, 0.5) = default beta; (0, 0, 1.0, 0.5, P=2) == selected gnn_qqpso.
 QW_WELL_GRID = ((0.0, 0.0), (0.05, 0.5), (0.05, 1.0), (0.1, 0.5), (0.1, 1.0), (0.2, 0.5), (0.2, 1.0))
@@ -177,6 +178,10 @@ def stage_validate(out_dir, bdir, sys_, exp, methods, args, log, quiet, overwrit
             w = dict(well_scale=L, well_frac=1.0, beta_start=bs, beta_end=be, polish_pops=PRIOR_POLISH)
             specs.append(make_spec("prior_qwqpso", B_sel, exp.budget_full, exp.delta_adjust,
                                    tag=prior_tag(s_, w), qw=w, prior_s=s_))
+    base_m = [m for m in PRIOR_BASE_METHODS if m in methods]
+    for m in base_m:                                  # swarm-free references: only s is chosen
+        for s_ in PRIOR_S_GRID:
+            specs.append(make_spec(m, B_sel, exp.budget_full, exp.delta_adjust, tag=f"S{s_:g}", prior_s=s_))
     use_pw = "gnn_pso_wpt" in methods
     if use_pw:
         for (ws, wf), (i_s, i_e), pp in itertools.product(QW_WELL_GRID, PW_INERTIA_GRID, PW_POLISH_GRID):
@@ -337,6 +342,35 @@ def stage_validate(out_dir, bdir, sys_, exp, methods, args, log, quiet, overwrit
             print(msg)
 
 
+    if base_m:
+        sel_all = {}
+        for m in base_m:
+            g = add_kgroup(val[val["method"] == m].copy(), exp)
+            grid = g.groupby("prior_s").agg(passed=("passed", "sum"), trials=("passed", "size"),
+                                            gated=("gated", "mean")).reset_index()
+            for kg, gk in g.groupby("Kgroup"):
+                sub = gk.groupby("prior_s").agg(**{f"passed_K{kg}": ("passed", "sum"),
+                                                   f"gated_K{kg}": ("gated", "mean")}).reset_index()
+                grid = grid.merge(sub, on="prior_s", how="left")
+            grid.insert(0, "method", m)
+            grid.to_csv(vdir / f"{m}_grid.csv", index=False)
+            best = grid.sort_values(["passed", "gated", "prior_s"], ascending=[False, False, True]).iloc[0]
+            sel_all[m] = dict(prior_s=float(best["prior_s"]), passed=int(best["passed"]),
+                              trials=int(best["trials"]), gated=float(best["gated"]))
+            msg = (f"[validate] selected {m}: s={sel_all[m]['prior_s']:g} pass {sel_all[m]['passed']}/"
+                   f"{sel_all[m]['trials']} gated {sel_all[m]['gated']:.4f}")
+            log.info(msg)
+            log.info(f"{m} grid:\n" + grid.to_string(index=False))
+            if not quiet:
+                print(msg)
+        (vdir / "selected_prior_base.json").write_text(json.dumps(sel_all, indent=2), encoding="utf-8")
+
+
+def selected_prior_base(out_dir: Path) -> dict:
+    p = out_dir / "validation" / "selected_prior_base.json"
+    return json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
+
+
 def selected_prior(out_dir: Path) -> tuple[float, dict]:
     p = out_dir / "validation" / "selected_prior.json"
     if not p.exists():
@@ -418,7 +452,8 @@ def stage_test(out_dir, bdir, sys_, exp, methods, args, log, quiet, overwrite):
             print(f"[test    ] gnn_qqpso config {qq}")
     qw = selected_qw(out_dir, args) if any(m in QW_METHODS + ("gnn_pso_wp",) for m in methods) else None
     pw = selected_pw(out_dir) if "gnn_pso_wpt" in methods else None
-    pr = selected_prior(out_dir) if any(m in PRIOR_METHODS for m in methods) else None
+    pr = selected_prior(out_dir) if "prior_qwqpso" in methods else None
+    pb = selected_prior_base(out_dir)
     if pr is not None:
         log.info(f"[test] prior config s={pr[0]} {pr[1]}")
         if not quiet:
@@ -464,8 +499,18 @@ def stage_test(out_dir, bdir, sys_, exp, methods, args, log, quiet, overwrite):
             specs.append(make_spec(k, B, exp.budget_full, exp.delta_adjust, pw=pw))
         elif k == "prior_qwqpso":
             specs.append(make_spec(k, B, exp.budget_full, exp.delta_adjust, qw=pr[1], prior_s=pr[0]))
-        elif k == "prior_direct":
-            specs.append(make_spec(k, B, exp.budget_full, exp.delta_adjust, prior_s=pr[0]))
+        elif k in PRIOR_BASE_METHODS:
+            if k in pb:
+                s_k = float(pb[k]["prior_s"])
+            elif pr is not None:
+                s_k = pr[0]
+            else:
+                p_qw = out_dir / "validation" / "selected_prior.json"
+                if not p_qw.exists():
+                    raise SystemExit(f"[test] {k}: no selected s (run validate with {k} or prior_qwqpso first)")
+                s_k = float(json.loads(p_qw.read_text(encoding="utf-8"))["prior_s"])
+            log.info(f"[test] {k} prior_s={s_k}")
+            specs.append(make_spec(k, B, exp.budget_full, exp.delta_adjust, prior_s=s_k))
         else:
             specs.append(make_spec(k, B, exp.budget_full, exp.delta_adjust, anchor_w0=w0, anchor_frac=fr))
     run_trial_stage(sys_, exp, filter_k(read_cases(bdir, "test"), args), specs, bdir / "models",
@@ -498,7 +543,7 @@ def stage_tables(out_dir, bdir, sys_, exp, log, quiet, plots):
              ("gnn_pso_wpt", "gnn_pso_p"),
              ("gnn_qwqpso", "gnn_ga"), ("gnn_qwqpso", "gnn_de"), ("gnn_qwqpso", "full_ga"),
              ("gnn_qwqpso", "full_de"), ("gnn_ga", "gnn_pso"), ("gnn_de", "gnn_pso"),
-             ("prior_qwqpso", "prior_direct")]
+             ("prior_qwqpso", "prior_direct"), ("prior_qwqpso", "prior_polish"), ("prior_polish", "prior_direct")]
     pairs = [(a, b) for a, b in pairs if a in present and b in present]
     make_all(out_dir, sys_, exp, test, val, labels_dir=None, models_dir=bdir / "models", cases=cases,
              ref="gnn_qpso", pairs=pairs, plots=plots, optimizer_name="QPSO", quiet=quiet, log=log)

@@ -32,6 +32,7 @@ DISPLAY = {
     "gnn_de": "GNN + short DE",
     "prior_qwqpso": "Prior + QW-QPSO",
     "prior_direct": "Physics prior (direct)",
+    "prior_polish": "Prior + line polish (no swarm)",
     # diagnostics (validation only, Table VIII): raw predictions, delta = 0
     "direct_mlp_raw": "Direct pooled MLP (raw)",
     "direct_gnn_raw": "Direct GNN (raw)",
@@ -57,7 +58,8 @@ QW_OFF = dict(well_scale=0.0, well_frac=0.0, beta_start=None, beta_end=None, pol
 #                gnn_qwqpso's (7 W x 3 inertia x 2 P = 42 cells) -> balanced tuning effort.
 PW_METHODS = ("gnn_pso_wp", "gnn_pso_wpt")
 # Learning-free methods: init = closed-form physics prior with RIS share s = prior_s (validation).
-PRIOR_METHODS = ("prior_qwqpso", "prior_direct")
+PRIOR_METHODS = ("prior_qwqpso", "prior_direct", "prior_polish")
+PRIOR_BASE_METHODS = ("prior_direct", "prior_polish")   # swarm-free references, own s on validation
 
 # key -> (optimizer, init, budget kind, anchored)
 _TABLE = {
@@ -92,12 +94,14 @@ _TABLE = {
     # learning-free variant: closed-form physics prior (common/prior.py) instead of the GNN
     "prior_qwqpso": ("qpso", "prior", "short", False),
     "prior_direct": (None, "prior", "zero", False),
+    "prior_polish": ("linepolish", "prior", "short", False),
 }
 
 _OPTIMIZERS = {"pso": ("baseline_code.pso", "run_pso"),
                "qpso": ("Quantummodel_code.qpso", "run_qpso"),
                "ga": ("baseline_code.ga", "run_ga"),
-               "de": ("baseline_code.de", "run_de")}
+               "de": ("baseline_code.de", "run_de"),
+               "linepolish": ("baseline_code.linepolish", "run_linepolish")}
 
 
 @dataclass(frozen=True)
