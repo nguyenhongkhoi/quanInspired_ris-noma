@@ -193,7 +193,7 @@ def trial_group(task: dict) -> list[dict]:
     share_ms = (time.perf_counter() - t0) * 1e3 / max(1, len(cases))
     bank_a = build_bank(sys_, layout, K, exp.assess_samples, bank_seed(exp.seed, "assess", lid, K))
 
-    need = sorted({s.init for s in specs if s.init})
+    need = sorted({s.init for s in specs if s.init and s.init != "prior"})
     models = {}
     for r in range(R):
         for arch in need:
@@ -215,7 +215,11 @@ def trial_group(task: dict) -> list[dict]:
                 prob = Problem(sys_, bank_s, P_tot, xi, "search")
                 infer_ms = 0.0
                 pred = None
-                if spec.init:
+                if spec.init == "prior":                       # closed-form physics prior, no model
+                    from .prior import physics_prior
+                    mb_a, s_a, m_a = physics_prior(sys_, K, spec.prior_s)
+                    pred = (float(mb_a), float(s_a), np.asarray(m_a, float))
+                elif spec.init:
                     model, norm, _ = models[(spec.init, r)]
                     mb_p, s_p, m_p, infer_ms = predict_alloc(model, norm, prob)
                     mb_a, s_a, m_a = adjust_prediction(sys_, mb_p, s_p, m_p, spec.delta)
@@ -281,6 +285,7 @@ def trial_group(task: dict) -> list[dict]:
                     qw_scale=spec.well_scale, qw_frac=spec.well_frac,
                     qw_bs=spec.beta_start if spec.beta_start is not None else exp.beta_start,
                     qw_be=spec.beta_end if spec.beta_end is not None else exp.beta_end,
+                    prior_s=spec.prior_s if spec.prior_s is not None else "",
                     pw_ws=spec.inertia_start if spec.inertia_start is not None else "",
                     pw_we=spec.inertia_end if spec.inertia_end is not None else "",
                     hist_rb=json.dumps(hist) if hist is not None else "",

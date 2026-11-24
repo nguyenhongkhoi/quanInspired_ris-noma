@@ -30,6 +30,8 @@ DISPLAY = {
     "gnn_ga": "GNN + short GA",
     "full_de": "Full DE",
     "gnn_de": "GNN + short DE",
+    "prior_qwqpso": "Prior + QW-QPSO",
+    "prior_direct": "Physics prior (direct)",
     # diagnostics (validation only, Table VIII): raw predictions, delta = 0
     "direct_mlp_raw": "Direct pooled MLP (raw)",
     "direct_gnn_raw": "Direct GNN (raw)",
@@ -54,6 +56,8 @@ QW_OFF = dict(well_scale=0.0, well_frac=0.0, beta_start=None, beta_end=None, pol
 #   gnn_pso_wpt: W, inertia schedule and P tuned on validation with a grid of the same size as
 #                gnn_qwqpso's (7 W x 3 inertia x 2 P = 42 cells) -> balanced tuning effort.
 PW_METHODS = ("gnn_pso_wp", "gnn_pso_wpt")
+# Learning-free methods: init = closed-form physics prior with RIS share s = prior_s (validation).
+PRIOR_METHODS = ("prior_qwqpso", "prior_direct")
 
 # key -> (optimizer, init, budget kind, anchored)
 _TABLE = {
@@ -85,6 +89,9 @@ _TABLE = {
     "gnn_ga": ("ga", "gnn", "short", False),
     "full_de": ("de", None, "full", False),
     "gnn_de": ("de", "gnn", "short", False),
+    # learning-free variant: closed-form physics prior (common/prior.py) instead of the GNN
+    "prior_qwqpso": ("qpso", "prior", "short", False),
+    "prior_direct": (None, "prior", "zero", False),
 }
 
 _OPTIMIZERS = {"pso": ("baseline_code.pso", "run_pso"),
@@ -113,6 +120,7 @@ class MethodSpec:
     beta_end: float | None = None
     inertia_start: float | None = None   # PSO inertia schedule (None -> Algorithm 1: 0.9 -> 0.4)
     inertia_end: float | None = None
+    prior_s: float | None = None         # RIS share of the physics prior (init == "prior")
 
     @property
     def seed_branch(self) -> str:
@@ -143,7 +151,8 @@ def qw_ablation(key: str, qw: dict) -> dict:
 
 def make_spec(key: str, budget_short: int, budget_full: int, delta: float,
               anchor_w0: float = 0.0, anchor_frac: float = 0.0, tag: str = "",
-              qq: dict | None = None, qw: dict | None = None, pw: dict | None = None) -> MethodSpec:
+              qq: dict | None = None, qw: dict | None = None, pw: dict | None = None,
+              prior_s: float | None = None) -> MethodSpec:
     if key not in _TABLE:
         raise KeyError(f"unknown method {key!r}; known: {sorted(_TABLE)}")
     opt, init, kind, anch = _TABLE[key]
@@ -164,6 +173,10 @@ def make_spec(key: str, budget_short: int, budget_full: int, delta: float,
         assert qw is not None, f"{key} needs a qw configuration (well_scale, well_frac, beta_*, polish_pops)"
         w = qw_ablation(key, qw)
         q["polish_pops"] = int(w["polish_pops"])
+    elif key == "prior_qwqpso":
+        assert qw is not None, f"{key} needs a qw configuration (well_scale, well_frac, beta_*, polish_pops)"
+        w = dict(QW_OFF, **{k: v for k, v in qw.items() if k in QW_OFF})
+        q["polish_pops"] = int(w["polish_pops"])
     elif key == "gnn_pso_wp":
         assert qw is not None, f"{key} needs the selected gnn_qwqpso configuration (W and P are copied)"
         w.update(well_scale=float(qw["well_scale"]), well_frac=float(qw["well_frac"]))
@@ -177,13 +190,18 @@ def make_spec(key: str, budget_short: int, budget_full: int, delta: float,
         raise ValueError(f"qw configuration given for non-QW method {key!r}")
     if pw and key != "gnn_pso_wpt":
         raise ValueError(f"pw configuration given for {key!r}")
+    if init == "prior":
+        assert prior_s is not None, f"{key} needs prior_s (RIS share of the physics prior)"
+    elif prior_s is not None:
+        raise ValueError(f"prior_s given for non-prior method {key!r}")
     bs = None if w["beta_start"] is None else float(w["beta_start"])
     be = None if w["beta_end"] is None else float(w["beta_end"])
     assert (bs is None) == (be is None), "beta_start and beta_end must be set together"
     return MethodSpec(key, int(budget), opt, init, d, anch, tag,
                       anchor_w0 if anch else 0.0, anchor_frac if anch else 0.0,
                       str(q["mbest_mode"]), str(q["beta_mode"]), int(q["polish_pops"]),
-                      float(w["well_scale"]), float(w["well_frac"]), bs, be, i_s, i_e)
+                      float(w["well_scale"]), float(w["well_frac"]), bs, be, i_s, i_e,
+                      None if prior_s is None else float(prior_s))
 
 
 def get_optimizer(name: str):
