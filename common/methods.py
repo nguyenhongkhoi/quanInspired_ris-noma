@@ -26,6 +26,10 @@ DISPLAY = {
     "gnn_qwqpso_noB": "GNN + QW-QPSO w/o B",
     "gnn_pso_wp": "GNN + short PSO + W + P",
     "gnn_pso_wpt": "GNN + short PSO + W + P (tuned)",
+    "full_ga": "Full GA",
+    "gnn_ga": "GNN + short GA",
+    "full_de": "Full DE",
+    "gnn_de": "GNN + short DE",
     # diagnostics (validation only, Table VIII): raw predictions, delta = 0
     "direct_mlp_raw": "Direct pooled MLP (raw)",
     "direct_gnn_raw": "Direct GNN (raw)",
@@ -76,10 +80,17 @@ _TABLE = {
     "gnn_qwqpso_noB": ("qpso", "gnn", "short", False),
     "gnn_pso_wp": ("pso", "gnn", "short", False),
     "gnn_pso_wpt": ("pso", "gnn", "short", False),
+    # other metaheuristics (comparison baselines, standard settings, no tuning)
+    "full_ga": ("ga", None, "full", False),
+    "gnn_ga": ("ga", "gnn", "short", False),
+    "full_de": ("de", None, "full", False),
+    "gnn_de": ("de", "gnn", "short", False),
 }
 
 _OPTIMIZERS = {"pso": ("baseline_code.pso", "run_pso"),
-               "qpso": ("Quantummodel_code.qpso", "run_qpso")}
+               "qpso": ("Quantummodel_code.qpso", "run_qpso"),
+               "ga": ("baseline_code.ga", "run_ga"),
+               "de": ("baseline_code.de", "run_de")}
 
 
 @dataclass(frozen=True)

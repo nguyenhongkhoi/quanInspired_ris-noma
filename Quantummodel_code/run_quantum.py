@@ -408,7 +408,7 @@ def stage_test(out_dir, bdir, sys_, exp, methods, args, log, quiet, overwrite):
     run_trial_stage(sys_, exp, filter_k(read_cases(bdir, "test"), args), specs, bdir / "models",
                     out_dir / "test" / "trials.csv",
                     "test", [m for m in ("gnn_qpso", "gnn_qqpso", "gnn_qwqpso", "gnn_pso_p", "gnn_pso_wp", "gnn_pso_wpt",
-                                         "full_qpso") if m in methods],
+                                         "full_qpso", "gnn_ga", "gnn_de", "full_ga", "full_de") if m in methods],
                     quiet, log, overwrite)
 
 
@@ -431,7 +431,9 @@ def stage_tables(out_dir, bdir, sys_, exp, log, quiet, plots):
              ("gnn_qwqpso", "gnn_qqpso"), ("gnn_qwqpso", "gnn_pso_p"), ("gnn_qwqpso", "gnn_qpso"),
              ("gnn_qwqpso", "gnn_qwqpso_noW"), ("gnn_qwqpso", "gnn_qwqpso_noB"),
              ("gnn_qwqpso", "gnn_pso_wp"), ("gnn_qwqpso", "gnn_pso_wpt"), ("gnn_pso_wp", "gnn_pso_p"),
-             ("gnn_pso_wpt", "gnn_pso_p")]
+             ("gnn_pso_wpt", "gnn_pso_p"),
+             ("gnn_qwqpso", "gnn_ga"), ("gnn_qwqpso", "gnn_de"), ("gnn_qwqpso", "full_ga"),
+             ("gnn_qwqpso", "full_de"), ("gnn_ga", "gnn_pso"), ("gnn_de", "gnn_pso")]
     pairs = [(a, b) for a, b in pairs if a in present and b in present]
     make_all(out_dir, sys_, exp, test, val, labels_dir=None, models_dir=bdir / "models", cases=cases,
              ref="gnn_qpso", pairs=pairs, plots=plots, optimizer_name="QPSO", quiet=quiet, log=log)
