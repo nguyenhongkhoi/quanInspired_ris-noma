@@ -38,6 +38,8 @@ DISPLAY = {
     "prior_dqpso_noBox": "DEP-prior + QW-QPSO w/o box",
     "prior_ddirect": "DEP-prior (direct)",
     "prior_dpolish": "DEP-prior + line polish (no swarm)",
+    "prior_pso": "Prior + short PSO (W + P)",
+    "prior_fullpso": "Full PSO + prior",
     # diagnostics (validation only, Table VIII): raw predictions, delta = 0
     "direct_mlp_raw": "Direct pooled MLP (raw)",
     "direct_gnn_raw": "Direct GNN (raw)",
@@ -71,6 +73,12 @@ PRIOR_BASE_METHODS = ("prior_direct", "prior_polish")   # swarm-free references,
 DPRIOR_METHODS = ("prior_dqpso", "prior_dqpso_noW", "prior_dqpso_noBox")
 DPRIOR_BASE_METHODS = ("prior_ddirect", "prior_dpolish")
 BOX_METHODS = ("prior_dqpso", "prior_dqpso_noW", "prior_dpolish")
+# Fair PSO counterparts of prior_qwqpso (same physics prior, same evaluator / ranking / budget):
+#   prior_pso    : B = 150, prior in particle 0 + the same W (well) and P (polish) components;
+#                  W x PSO-inertia x s tuned on the same validation with a grid of the same size
+#                  as prior_qwqpso's (beta schedule <-> inertia schedule).
+#   prior_fullpso: B = 1800 (Algorithm 1 settings), prior in particle 0, no W / P.
+PRIOR_PSO_METHODS = ("prior_pso", "prior_fullpso")
 PRIOR_INITS = ("prior", "dep_prior")
 
 # key -> (optimizer, init, budget kind, anchored)
@@ -112,6 +120,8 @@ _TABLE = {
     "prior_dqpso_noBox": ("qpso", "dep_prior", "short", False),
     "prior_ddirect": (None, "dep_prior", "zero", False),
     "prior_dpolish": ("linepolish", "dep_prior", "short", False),
+    "prior_pso": ("pso", "prior", "short", False),
+    "prior_fullpso": ("pso", "prior", "full", False),
 }
 
 _OPTIMIZERS = {"pso": ("baseline_code.pso", "run_pso"),
@@ -209,6 +219,11 @@ def make_spec(key: str, budget_short: int, budget_full: int, delta: float,
         assert qw is not None, f"{key} needs the selected gnn_qwqpso configuration (W and P are copied)"
         w.update(well_scale=float(qw["well_scale"]), well_frac=float(qw["well_frac"]))
         q["polish_pops"] = int(qw["polish_pops"])      # beta has no PSO meaning: not copied
+    elif key == "prior_pso":
+        assert pw is not None, f"{key} needs a pw configuration (well_scale, well_frac, inertia_*, polish_pops)"
+        w.update(well_scale=float(pw["well_scale"]), well_frac=float(pw["well_frac"]))
+        q["polish_pops"] = int(pw["polish_pops"])
+        i_s, i_e = float(pw["inertia_start"]), float(pw["inertia_end"])
     elif key == "gnn_pso_wpt":
         assert pw is not None, f"{key} needs a pw configuration (well_scale, well_frac, inertia_*, polish_pops)"
         w.update(well_scale=float(pw["well_scale"]), well_frac=float(pw["well_frac"]))
@@ -216,7 +231,7 @@ def make_spec(key: str, budget_short: int, budget_full: int, delta: float,
         i_s, i_e = float(pw["inertia_start"]), float(pw["inertia_end"])
     elif qw:
         raise ValueError(f"qw configuration given for non-QW method {key!r}")
-    if pw and key != "gnn_pso_wpt":
+    if pw and key not in ("gnn_pso_wpt", "prior_pso"):
         raise ValueError(f"pw configuration given for {key!r}")
     if init in PRIOR_INITS:
         assert prior_s is not None, f"{key} needs prior_s (RIS share of the physics prior)"
