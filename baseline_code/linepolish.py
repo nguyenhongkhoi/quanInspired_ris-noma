@@ -17,7 +17,8 @@ from common.swarm import SearchResult, SwarmMemory, check_budget, run_polish
 
 
 def run_linepolish(problem: Problem, budget: int, swarm: int, seed: int,
-                   init_z: np.ndarray | None = None, archive_size: int = 0, **_unused) -> SearchResult:
+                   init_z: np.ndarray | None = None, archive_size: int = 0, zb_max: float = 1.0,
+                   **_unused) -> SearchResult:
     S = int(swarm)
     T = check_budget(budget, S)
     D = problem.K + 1
@@ -25,11 +26,12 @@ def run_linepolish(problem: Problem, budget: int, swarm: int, seed: int,
     init_z = np.asarray(init_z, float).reshape(D)
     assert np.all((init_z >= 0) & (init_z <= 1)), "init point outside [0,1]"
     Z = np.repeat(init_z[None, :], S, axis=0)
-    Z[1:, 0] = np.linspace(0.0, 1.0, S - 1)        # z_b scan; row 0 keeps the prior exactly
+    assert 0.0 < zb_max <= 1.0 and init_z[0] <= zb_max + 1e-9, (zb_max, init_z[0])
+    Z[1:, 0] = np.linspace(0.0, zb_max, S - 1)     # z_b scan; row 0 keeps the prior exactly
     ev = problem.evaluate_z(Z)
     mem = SwarmMemory(problem, archive_size)
     mem.init(Z, ev)
-    run_polish(problem, mem, S, T - 1)
+    run_polish(problem, mem, S, T - 1, zb_max)
     res = mem.result(n_evals=S * T, init_feasible=bool(ev.feasible[0]))
     assert len(res.history_best_rb) == T
     return res

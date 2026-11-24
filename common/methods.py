@@ -33,6 +33,11 @@ DISPLAY = {
     "prior_qwqpso": "Prior + QW-QPSO",
     "prior_direct": "Physics prior (direct)",
     "prior_polish": "Prior + line polish (no swarm)",
+    "prior_dqpso": "DEP-prior + boxed QW-QPSO",
+    "prior_dqpso_noW": "DEP-prior + boxed QW-QPSO w/o W",
+    "prior_dqpso_noBox": "DEP-prior + QW-QPSO w/o box",
+    "prior_ddirect": "DEP-prior (direct)",
+    "prior_dpolish": "DEP-prior + line polish (no swarm)",
     # diagnostics (validation only, Table VIII): raw predictions, delta = 0
     "direct_mlp_raw": "Direct pooled MLP (raw)",
     "direct_gnn_raw": "Direct GNN (raw)",
@@ -60,6 +65,13 @@ PW_METHODS = ("gnn_pso_wp", "gnn_pso_wpt")
 # Learning-free methods: init = closed-form physics prior with RIS share s = prior_s (validation).
 PRIOR_METHODS = ("prior_qwqpso", "prior_direct", "prior_polish")
 PRIOR_BASE_METHODS = ("prior_direct", "prior_polish")   # swarm-free references, own s on validation
+# DEP-aware prior (common/prior.py dep_prior): m_b on min(DEP bound, QoS bound) computed from the
+# case's Willie moments (0 objective evaluations); the swarm searches a box z_b <= zb_cap, so its
+# job is the public split / RIS share / m_b below the cap, not finding the DEP boundary.
+DPRIOR_METHODS = ("prior_dqpso", "prior_dqpso_noW", "prior_dqpso_noBox")
+DPRIOR_BASE_METHODS = ("prior_ddirect", "prior_dpolish")
+BOX_METHODS = ("prior_dqpso", "prior_dqpso_noW", "prior_dpolish")
+PRIOR_INITS = ("prior", "dep_prior")
 
 # key -> (optimizer, init, budget kind, anchored)
 _TABLE = {
@@ -95,6 +107,11 @@ _TABLE = {
     "prior_qwqpso": ("qpso", "prior", "short", False),
     "prior_direct": (None, "prior", "zero", False),
     "prior_polish": ("linepolish", "prior", "short", False),
+    "prior_dqpso": ("qpso", "dep_prior", "short", False),
+    "prior_dqpso_noW": ("qpso", "dep_prior", "short", False),
+    "prior_dqpso_noBox": ("qpso", "dep_prior", "short", False),
+    "prior_ddirect": (None, "dep_prior", "zero", False),
+    "prior_dpolish": ("linepolish", "dep_prior", "short", False),
 }
 
 _OPTIMIZERS = {"pso": ("baseline_code.pso", "run_pso"),
@@ -124,7 +141,8 @@ class MethodSpec:
     beta_end: float | None = None
     inertia_start: float | None = None   # PSO inertia schedule (None -> Algorithm 1: 0.9 -> 0.4)
     inertia_end: float | None = None
-    prior_s: float | None = None         # RIS share of the physics prior (init == "prior")
+    prior_s: float | None = None         # RIS share of the physics prior (init == "prior"/"dep_prior")
+    zb_box: bool = False                 # restrict z_b <= zb_cap (DEP/QoS bound), prior_d* only
 
     @property
     def seed_branch(self) -> str:
@@ -177,6 +195,12 @@ def make_spec(key: str, budget_short: int, budget_full: int, delta: float,
         assert qw is not None, f"{key} needs a qw configuration (well_scale, well_frac, beta_*, polish_pops)"
         w = qw_ablation(key, qw)
         q["polish_pops"] = int(w["polish_pops"])
+    elif key in DPRIOR_METHODS:
+        assert qw is not None, f"{key} needs a qw configuration (well_scale, well_frac, beta_*, polish_pops)"
+        w = dict(QW_OFF, **{k: v for k, v in qw.items() if k in QW_OFF})
+        if key == "prior_dqpso_noW":
+            w["well_scale"], w["well_frac"] = 0.0, 0.0
+        q["polish_pops"] = int(w["polish_pops"])
     elif key == "prior_qwqpso":
         assert qw is not None, f"{key} needs a qw configuration (well_scale, well_frac, beta_*, polish_pops)"
         w = dict(QW_OFF, **{k: v for k, v in qw.items() if k in QW_OFF})
@@ -194,7 +218,7 @@ def make_spec(key: str, budget_short: int, budget_full: int, delta: float,
         raise ValueError(f"qw configuration given for non-QW method {key!r}")
     if pw and key != "gnn_pso_wpt":
         raise ValueError(f"pw configuration given for {key!r}")
-    if init == "prior":
+    if init in PRIOR_INITS:
         assert prior_s is not None, f"{key} needs prior_s (RIS share of the physics prior)"
     elif prior_s is not None:
         raise ValueError(f"prior_s given for non-prior method {key!r}")
@@ -205,7 +229,7 @@ def make_spec(key: str, budget_short: int, budget_full: int, delta: float,
                       anchor_w0 if anch else 0.0, anchor_frac if anch else 0.0,
                       str(q["mbest_mode"]), str(q["beta_mode"]), int(q["polish_pops"]),
                       float(w["well_scale"]), float(w["well_frac"]), bs, be, i_s, i_e,
-                      None if prior_s is None else float(prior_s))
+                      None if prior_s is None else float(prior_s), key in BOX_METHODS)
 
 
 def get_optimizer(name: str):

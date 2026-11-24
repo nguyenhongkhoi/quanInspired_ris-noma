@@ -34,6 +34,11 @@ gnn_qwqpso adds a QPSO-specific initialisation:
      attractor. Draws come from a SEPARATE stream (seed, WELL_STREAM) so the main rng
      sequence is identical to gnn_qpso. Particle 0 stays exactly z_hat.
 
+prior_dqpso restricts the search box (zb_max < 1): z_b in [0, zb_max], where zb_max is the
+DEP/QoS necessary bound on m_b (common/prior.py zb_cap, 0 objective evaluations). Uniform
+particles are scaled into the box (same draws), the well and every update are reflected into
+[0, hi], and the polish scans inside the box. zb_max = 1 is exactly the code path above.
+
 Pairing: the initial swarm is drawn exactly like PSO (z then an unused velocity
 draw), so for a given seed QPSO and PSO start from the same 30 particles; all
 later draws are made in the same order with or without a learned particle.
@@ -43,7 +48,7 @@ from __future__ import annotations
 import numpy as np
 
 from common.evaluator import Problem, rank_order
-from common.swarm import SearchResult, SwarmMemory, check_budget, run_polish
+from common.swarm import SearchResult, SwarmMemory, box_hi, check_budget, run_polish, to_box
 
 MBEST_MODES = ("mean", "rank", "feas_rank")
 WELL_STREAM = 7919                      # sub-stream id for component W (keeps main rng aligned)
@@ -82,7 +87,7 @@ def run_qpso(problem: Problem, budget: int, swarm: int, seed: int,
              anchor_z: np.ndarray | None = None, anchor_w0: float = 0.0,
              anchor_frac: float = 0.0, anchor_gate: bool = True,
              mbest_mode: str = "mean", beta_mode: str = "linear", polish_pops: int = 0,
-             well_scale: float = 0.0, well_frac: float = 0.0,
+             well_scale: float = 0.0, well_frac: float = 0.0, zb_max: float = 1.0,
              v_init: float = 0.1, **_unused) -> SearchResult:
     assert boundary in ("reflect", "clip")
     assert mbest_mode in MBEST_MODES, mbest_mode
@@ -95,8 +100,13 @@ def run_qpso(problem: Problem, budget: int, swarm: int, seed: int,
     rng = np.random.default_rng(seed)
     z = rng.random((S, D))
     _ = rng.uniform(-v_init, v_init, (S, D))   # same draw as PSO velocity init (pairing)
+    hi = box_hi(D, zb_max)                     # None -> unit box (original path)
+    if hi is not None:
+        z = z * hi[None, :]
     if init_z is not None:
         init_z = np.asarray(init_z, float).reshape(D)
+        if hi is not None:
+            assert init_z[0] <= hi[0] + 1e-9, (init_z[0], hi[0])
         z[0] = init_z
         n_well = int(round(float(well_frac) * (S - 1))) if well_scale > 0.0 else 0
         assert 0 <= n_well <= S - 1, n_well
@@ -104,7 +114,8 @@ def run_qpso(problem: Problem, budget: int, swarm: int, seed: int,
             rng_w = np.random.default_rng([int(seed), WELL_STREAM])
             u_w = 1.0 - rng_w.random((n_well, D))          # (0, 1]
             s_w = np.where(rng_w.random((n_well, D)) < 0.5, -1.0, 1.0)
-            z[1:1 + n_well] = _boundary(init_z[None, :] + s_w * float(well_scale) * np.log(1.0 / u_w), boundary)
+            y_w = init_z[None, :] + s_w * float(well_scale) * np.log(1.0 / u_w)
+            z[1:1 + n_well] = _boundary(y_w, boundary) if hi is None else to_box(y_w, hi, boundary)
             assert z.shape == (S, D) and np.all((z >= 0) & (z <= 1))
     ev = problem.evaluate_z(z)
     init_feas = bool(ev.feasible[0]) if init_z is not None else None
@@ -135,11 +146,11 @@ def run_qpso(problem: Problem, budget: int, swarm: int, seed: int,
             f_t = float(np.mean(mem.pf))
             beta = beta_end + (beta - beta_end) * (1.0 - f_t)
         z = P + sign * beta * np.abs(mbest[None, :] - z) * np.log(1.0 / u)
-        z = _boundary(z, boundary)
+        z = _boundary(z, boundary) if hi is None else to_box(z, hi, boundary)
         ev = problem.evaluate_z(z)
         mem.update(z, ev)
 
-    run_polish(problem, mem, S, polish_pops)    # component P (common/swarm.py, shared with PSO)
+    run_polish(problem, mem, S, polish_pops, zb_max)    # component P (common/swarm.py, shared with PSO)
 
     res = mem.result(n_evals=S * T, init_feasible=init_feas)
     assert len(res.history_best_rb) == T

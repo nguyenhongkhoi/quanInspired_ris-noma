@@ -193,7 +193,7 @@ def trial_group(task: dict) -> list[dict]:
     share_ms = (time.perf_counter() - t0) * 1e3 / max(1, len(cases))
     bank_a = build_bank(sys_, layout, K, exp.assess_samples, bank_seed(exp.seed, "assess", lid, K))
 
-    need = sorted({s.init for s in specs if s.init and s.init != "prior"})
+    need = sorted({s.init for s in specs if s.init and s.init not in ("prior", "dep_prior")})
     models = {}
     for r in range(R):
         for arch in need:
@@ -219,6 +219,10 @@ def trial_group(task: dict) -> list[dict]:
                     from .prior import physics_prior
                     mb_a, s_a, m_a = physics_prior(sys_, K, spec.prior_s)
                     pred = (float(mb_a), float(s_a), np.asarray(m_a, float))
+                elif spec.init == "dep_prior":                 # DEP-aware prior: Willie moments only
+                    from .prior import dep_prior
+                    mb_a, s_a, m_a = dep_prior(prob, spec.prior_s)
+                    pred = (float(mb_a), float(s_a), np.asarray(m_a, float))
                 elif spec.init:
                     model, norm, _ = models[(spec.init, r)]
                     mb_p, s_p, m_p, infer_ms = predict_alloc(model, norm, prob)
@@ -226,6 +230,7 @@ def trial_group(task: dict) -> list[dict]:
                     pred = (float(mb_a), float(s_a), np.asarray(m_a, float))
                 init_feas = None
                 hist = None
+                zbc = ""
                 if spec.optimizer is None:
                     assert pred is not None, f"{spec.key} needs a prediction"
                     mb, s, m_sic = pred
@@ -235,6 +240,9 @@ def trial_group(task: dict) -> list[dict]:
                     seed = opt_seed(exp.seed, case["case_id"], exp.pso_seeds[r], spec.seed_branch, spec.budget)
                     init_z = alloc_to_z(sys_, pred[0], pred[1], pred[2][None, :])[0] if pred else None
                     kw = {}
+                    if spec.zb_box:                               # timed: part of the method
+                        from .prior import zb_cap
+                        kw["zb_max"] = zbc = zb_cap(prob, spec.prior_s)
                     if spec.optimizer == "qpso":
                         kw.update(beta_start=exp.beta_start if spec.beta_start is None else spec.beta_start,
                                   beta_end=exp.beta_end if spec.beta_end is None else spec.beta_end,
@@ -289,6 +297,7 @@ def trial_group(task: dict) -> list[dict]:
                     pw_ws=spec.inertia_start if spec.inertia_start is not None else "",
                     pw_we=spec.inertia_end if spec.inertia_end is not None else "",
                     hist_rb=json.dumps(hist) if hist is not None else "",
+                    zb_cap=zbc,
                 )
                 rows.append(row)
     return rows

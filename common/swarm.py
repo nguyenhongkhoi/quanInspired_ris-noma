@@ -102,32 +102,34 @@ class SwarmMemory:
                             history_best_feas=self.hist_feas)
 
 
-def polish_population(mem: SwarmMemory, S: int, step: float | None) -> tuple[np.ndarray, float]:
+def polish_population(mem: SwarmMemory, S: int, step: float | None,
+                      zb_max: float = 1.0) -> tuple[np.ndarray, float]:
     """Component P: one batched line-search population on z_b (covert fraction) around gbest.
 
     Shared by PSO and QPSO (same code -> fair comparison). Other coordinates of gbest are kept.
     First population (step=None): scan [z_b, 1] if gbest is feasible (push m_b up), else
     [0, z_b) (pull m_b down to regain feasibility). Later populations: +/- one previous grid step.
     Returns (Z of shape (S, D), next step). Uses no random numbers.
+    zb_max < 1 restricts z_b to [0, zb_max] (DEP-capped box, prior_d*); 1.0 = original behaviour.
     """
     gi = mem.gbest_index()
     g = mem.pz[gi].copy()
     zb = float(g[0])
     if step is None:
-        if bool(mem.pf[gi]) and zb < 1.0 - 1e-9:
-            grid = zb + (1.0 - zb) * np.arange(1, S + 1) / S
-            nxt = (1.0 - zb) / S
+        if bool(mem.pf[gi]) and zb < zb_max - 1e-9:
+            grid = zb + (zb_max - zb) * np.arange(1, S + 1) / S
+            nxt = (zb_max - zb) / S
         elif (not bool(mem.pf[gi])) and zb > 1e-9:
             grid = zb * np.arange(0, S) / S
             nxt = zb / S
         else:                                             # at the box edge: symmetric local scan
-            nxt = 1.0 / S
+            nxt = zb_max / S
             grid = zb + np.linspace(-nxt * S / 2, nxt * S / 2, S)
     else:
         grid = zb + np.linspace(-step, step, S)
         nxt = 2.0 * step / max(S - 1, 1)
     # clip: zb + (1 - zb) * S / S can exceed 1 by one ulp in floating point
-    grid = np.clip(np.asarray(grid, dtype=float), 0.0, 1.0)
+    grid = np.clip(np.asarray(grid, dtype=float), 0.0, zb_max)
     assert grid.shape == (S,), grid.shape
     Z = np.repeat(g[None, :], S, axis=0)
     Z[:, 0] = grid
@@ -135,11 +137,11 @@ def polish_population(mem: SwarmMemory, S: int, step: float | None) -> tuple[np.
     return Z, float(nxt)
 
 
-def run_polish(problem: Problem, mem: SwarmMemory, S: int, n_pops: int) -> None:
+def run_polish(problem: Problem, mem: SwarmMemory, S: int, n_pops: int, zb_max: float = 1.0) -> None:
     """Spend the last n_pops populations of the budget on polish_population (updates mem)."""
     step = None
     for _ in range(int(n_pops)):
-        Z, step = polish_population(mem, S, step)
+        Z, step = polish_population(mem, S, step, zb_max)
         mem.update(Z, problem.evaluate_z(Z))
 
 
@@ -157,8 +159,26 @@ def reflect01(z: np.ndarray) -> np.ndarray:
     return np.where(y > 1.0, 2.0 - y, y)
 
 
+def box_hi(D: int, zb_max: float) -> np.ndarray | None:
+    """Per-coordinate upper bound of the search box: z_b <= zb_max, others <= 1.
+    None when zb_max >= 1 (original unit box; callers then use the original code path)."""
+    if zb_max >= 1.0:
+        return None
+    assert 0.0 < zb_max < 1.0, zb_max
+    hi = np.ones(int(D))
+    hi[0] = float(zb_max)
+    return hi
+
+
+def to_box(z: np.ndarray, hi: np.ndarray, mode: str = "reflect") -> np.ndarray:
+    """Reflect (or clip) into [0, hi] per coordinate."""
+    if mode == "clip":
+        return np.clip(z, 0.0, hi)
+    return reflect01(z / hi) * hi
+
+
 def well_init(z: np.ndarray, init_z: np.ndarray, seed: int, well_scale: float, well_frac: float,
-              boundary: str = "reflect") -> np.ndarray:
+              boundary: str = "reflect", hi: np.ndarray | None = None) -> np.ndarray:
     """Component W, shared by PSO (control gnn_pso_wp/_wpt) and QPSO (gnn_qwqpso).
 
     Particles 1..round(f*(S-1)) are redrawn as z_hat +/- L*ln(1/u) (u ~ U(0,1], sign 1/2),
@@ -176,6 +196,9 @@ def well_init(z: np.ndarray, init_z: np.ndarray, seed: int, well_scale: float, w
     s_w = np.where(rng_w.random((n_well, D)) < 0.5, -1.0, 1.0)
     y = init_z[None, :] + s_w * float(well_scale) * np.log(1.0 / u_w)
     z = z.copy()
-    z[1:1 + n_well] = np.clip(y, 0.0, 1.0) if boundary == "clip" else reflect01(y)
+    if hi is not None:                       # restricted box (prior_d*)
+        z[1:1 + n_well] = to_box(y, hi, boundary)
+    else:
+        z[1:1 + n_well] = np.clip(y, 0.0, 1.0) if boundary == "clip" else reflect01(y)
     assert z.shape == (S, D) and np.all((z >= 0) & (z <= 1))
     return z
