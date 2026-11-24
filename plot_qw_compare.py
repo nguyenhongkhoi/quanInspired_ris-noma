@@ -28,8 +28,8 @@ REF = "full_pso"
 METHODS = ["gnn_pso", "gnn_pso_p", "gnn_qwqpso"]
 LABEL = {"full_pso": "Full PSO (B=1800)", "gnn_pso": "GNN + short PSO [paper]",
          "gnn_pso_p": "GNN + short PSO + P", "gnn_qwqpso": "GNN + QW-QPSO (proposed)"}
-COLOR = {"full_pso": "0.45", "gnn_pso": "#1f77b4", "gnn_pso_p": "#ff7f0e", "gnn_qwqpso": "#d62728"}
-MARK = {"full_pso": "s", "gnn_pso": "o", "gnn_pso_p": "^", "gnn_qwqpso": "D"}
+COLOR = {"full_pso": "#555555", "gnn_pso": "#d62728", "gnn_pso_p": "#ff7f0e", "gnn_qwqpso": "#1f4e9c"}
+MARK = {"full_pso": "*", "gnn_pso": "^", "gnn_pso_p": "o", "gnn_qwqpso": "D"}
 PAIRS = [("gnn_qwqpso", "gnn_pso"), ("gnn_qwqpso", "gnn_pso_p")]
 BOOT_N, BOOT_SEED = 2000, 7317
 

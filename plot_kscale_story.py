@@ -34,8 +34,11 @@ ALL = [REF] + SHORT
 LABEL = {"full_pso": "Full PSO (B=1800)", "gnn_pso": "GNN + short PSO [paper]",
          "gnn_pso_p": "GNN + short PSO + P", "gnn_qwqpso": "GNN + QW-QPSO (proposed)"}
 SHORT_LABEL = {"full_pso": "Full PSO", "gnn_pso": "GNN+PSO", "gnn_pso_p": "GNN+PSO+P", "gnn_qwqpso": "QW-QPSO"}
-COLOR = {"full_pso": "#6b6b66", "gnn_pso": "#2a78d6", "gnn_pso_p": "#eb6834", "gnn_qwqpso": "#1baf7a"}
-MARK = {"full_pso": "s", "gnn_pso": "o", "gnn_pso_p": "^", "gnn_qwqpso": "D"}
+# palette follows the user's reference figure: proposed = dark blue, strong baseline = orange,
+# weak baseline = red, reference/upper curve = grey dotted
+COLOR = {"full_pso": "#555555", "gnn_pso": "#d62728", "gnn_pso_p": "#ff7f0e", "gnn_qwqpso": "#1f4e9c"}
+MARK = {"full_pso": "*", "gnn_pso": "^", "gnn_pso_p": "o", "gnn_qwqpso": "D"}
+LSTY = {"full_pso": ":", "gnn_pso": "-", "gnn_pso_p": "-", "gnn_qwqpso": "-"}
 INK, INK2, GRID = "#1f1f1e", "#5f5e58", "#e4e3de"
 
 
@@ -127,7 +130,7 @@ def main() -> None:
     for m in ALL:
         y = [perK[k][m]["pass_pct"] for k in Ks]
         ax2.plot(x, y, marker=MARK[m], color=COLOR[m], label=SHORT_LABEL[m], lw=2.0, ms=6,
-                 ls="--" if m == REF else "-", mec="white", mew=0.8)
+                 ls=LSTY[m], mec="white", mew=0.8)
     ax2.set_ylabel("Pass rate (%)")
     ax2.set_title("(b) Pass rate (independent assessment)")
     ax2.legend(fontsize=7.5, loc="lower left", frameon=False)
@@ -168,7 +171,7 @@ def main() -> None:
             ref_final = curves[REF][1][-1]
         for m, (ev, y) in curves.items():
             yy = 100 * y / ref_final if ref_final else y
-            ax.plot(ev, yy, color=COLOR[m], lw=2.0, ls="--" if m == REF else "-",
+            ax.plot(ev, yy, color=COLOR[m], lw=2.0, ls=LSTY[m],
                     marker=MARK[m] if m != REF else None, ms=4, label=SHORT_LABEL[m])
         ax.axvline(150, color=INK2, lw=0.8, ls=":")
         ax.text(150, 2, " B=150", fontsize=7, color=INK2)
@@ -221,7 +224,7 @@ def main() -> None:
     ks_o = [k for k in unseen]
     fig, axs = plt.subplots(1, len(ks_o), figsize=(3.6 * len(ks_o), 3.6), sharey=True)
     axs = np.atleast_1d(axs)
-    cat_col = {"pass": "#1baf7a", "point_only": "#eda100", "point_fail": "#c9c8c1"}
+    cat_col = {"pass": "#1f4e9c", "point_only": "#ff7f0e", "point_fail": "#c9c8c1"}
     for ax, k in zip(axs, ks_o):
         d = df[df["K"] == k]
         bottom = np.zeros(len(ALL))
@@ -268,6 +271,64 @@ def main() -> None:
     save(fig, out, "fig_ks_layouts")
     plt.close(fig)
     pd.DataFrame(wins).to_csv(out / "tables" / "ks_layout_wins.csv", index=False)
+
+    # ---- Fig 6: K up to 6 only, 2x2 panels, shared legend on top ------------
+    k6 = [k for k in Ks if k <= 6]
+    if len(k6) >= 2:
+        def box(ax) -> None:
+            ax.grid(ls=":", color="#bdbdbd", lw=0.8)
+            ax.set_axisbelow(True)
+            ax.tick_params(labelsize=9)
+
+        xt = [str(k) + (" (unseen)" if k in unseen else "") for k in k6]
+        fig, axs = plt.subplots(2, 2, figsize=(10.5, 8.2))
+        panels = [(axs[0, 0], "gated", r"Gated covert rate $\hat R_{\rm gated}$ (bit/s/Hz)", "(a)"),
+                  (axs[0, 1], "pass_pct", "Pass rate (%)", "(b)"),
+                  (axs[1, 0], "pct_full", "Gated rate, % of Full PSO", "(c)")]
+        for ax, key, ylab, tag in panels:
+            for m in ALL:
+                if key == "pct_full" and m == REF:
+                    ax.plot(k6, [100.0] * len(k6), color=COLOR[m], ls=LSTY[m], lw=1.6, marker=MARK[m], ms=8)
+                    continue
+                ax.plot(k6, [perK[k][m][key] for k in k6], color=COLOR[m], ls=LSTY[m], lw=1.8,
+                        marker=MARK[m], ms=8 if m == REF else 7)
+            ax.set_xticks(k6, xt)
+            ax.set_xlabel(f"Number of public users K\n{tag}")
+            ax.set_ylabel(ylab)
+            box(ax)
+        # anytime at the largest K <= 6
+        ka = max(k6)
+        ax = axs[1, 1]
+        d = df[df["K"] == ka]
+        for m in ALL:
+            h = d[(d["method"] == m) & (d["hist_rb"].fillna("") != "")]["hist_rb"]
+            if h.empty:
+                continue
+            H = [json.loads(v) for v in h]
+            T = max(len(v) for v in H)
+            A = np.zeros((len(H), T))
+            for i, v in enumerate(H):
+                a = np.array([0.0 if t is None else t for t in v])
+                A[i, :len(a)] = a
+                A[i, len(a):] = a[-1]
+            ev = (np.arange(T) + 1) * S
+            ax.plot(ev, A.mean(axis=0), color=COLOR[m], ls=LSTY[m], lw=1.8, marker=MARK[m],
+                    ms=8 if m == REF else 7, markevery=max(1, T // 8))
+        ax.axvline(150, color="#7f7f7f", lw=0.9, ls="--")
+        ax.text(158, ax.get_ylim()[0] + 0.03 * (ax.get_ylim()[1] - ax.get_ylim()[0]), "B = 150", fontsize=8,
+                color="#555555")
+        ax.set_xscale("log")
+        ax.set_xlabel(f"Objective evaluations (K = {ka}, search bank)\n(d)")
+        ax.set_ylabel(r"Best feasible $R_b$ (bit/s/Hz)")
+        box(ax)
+        from matplotlib.lines import Line2D
+        handles = [Line2D([], [], color=COLOR[m], ls=LSTY[m], lw=1.8, marker=MARK[m], ms=7,
+                          label=LABEL[m]) for m in ["gnn_qwqpso", "gnn_pso_p", "gnn_pso", REF]]
+        fig.legend(handles=handles, loc="upper center", ncol=4, fontsize=9, frameon=False,
+                   bbox_to_anchor=(0.5, 1.0))
+        fig.tight_layout(rect=(0, 0, 1, 0.95))
+        save(fig, out, "fig_ks_upto6")
+        plt.close(fig)
 
     print(cost.to_string(index=False))
     print(pd.DataFrame(wins).to_string(index=False))
