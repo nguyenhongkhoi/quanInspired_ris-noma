@@ -6,19 +6,26 @@ or not an initial particle is supplied; the learned particle only overwrites z[0
 polish_pops (default 0 = Algorithm 1 of the paper, unchanged): the last n populations
 of the budget run component P (common/swarm.py run_polish, the same code as QPSO's P).
 Only used by the fairness control gnn_pso_p; inertia schedule spans the T-1-n updates.
+
+well_scale/well_frac (default 0 = off): component W (common/swarm.py well_init, the SAME
+code and rng stream as gnn_qwqpso), used only by the controls gnn_pso_wp / gnn_pso_wpt
+("does the quantum-well initialisation need QPSO?"). With W on, gnn_pso_wp and gnn_qwqpso
+start from the identical 30-particle population; only the update rule differs.
 """
 from __future__ import annotations
 
 import numpy as np
 
 from common.evaluator import Problem
-from common.swarm import SearchResult, SwarmMemory, check_budget, run_polish
+from common.swarm import SearchResult, SwarmMemory, check_budget, run_polish, well_init
 
 
 def run_pso(problem: Problem, budget: int, swarm: int, seed: int,
             init_z: np.ndarray | None = None, archive_size: int = 0,
             c1: float = 1.5, c2: float = 1.5, w_start: float = 0.9, w_end: float = 0.4,
-            v_init: float = 0.1, v_max: float = 0.25, polish_pops: int = 0, **_unused) -> SearchResult:
+            v_init: float = 0.1, v_max: float = 0.25, polish_pops: int = 0,
+            well_scale: float = 0.0, well_frac: float = 0.0, boundary: str = "reflect",
+            **_unused) -> SearchResult:
     S = int(swarm)
     T = check_budget(budget, S)
     polish_pops = int(polish_pops)
@@ -31,6 +38,7 @@ def run_pso(problem: Problem, budget: int, swarm: int, seed: int,
         init_z = np.asarray(init_z, float).reshape(D)
         assert np.all((init_z >= 0) & (init_z <= 1)), "init particle outside [0,1]"
         z[0] = init_z
+        z = well_init(z, init_z, seed, well_scale, well_frac, boundary)   # component W (off by default)
     ev = problem.evaluate_z(z)
     init_feas = bool(ev.feasible[0]) if init_z is not None else None
     mem = SwarmMemory(problem, archive_size)

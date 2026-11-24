@@ -146,3 +146,36 @@ def run_polish(problem: Problem, mem: SwarmMemory, S: int, n_pops: int) -> None:
 def check_budget(budget: int, swarm: int) -> int:
     assert budget >= swarm and budget % swarm == 0, f"budget {budget} must be a multiple of swarm {swarm}"
     return budget // swarm
+
+
+WELL_STREAM = 7919          # sub-stream id for component W (keeps the main rng sequence aligned)
+
+
+def reflect01(z: np.ndarray) -> np.ndarray:
+    """Reflection into [0, 1] (same rule as QPSO's default boundary)."""
+    y = np.mod(z, 2.0)
+    return np.where(y > 1.0, 2.0 - y, y)
+
+
+def well_init(z: np.ndarray, init_z: np.ndarray, seed: int, well_scale: float, well_frac: float,
+              boundary: str = "reflect") -> np.ndarray:
+    """Component W, shared by PSO (control gnn_pso_wp/_wpt) and QPSO (gnn_qwqpso).
+
+    Particles 1..round(f*(S-1)) are redrawn as z_hat +/- L*ln(1/u) (u ~ U(0,1], sign 1/2),
+    then reflected (or clipped) into [0,1]. Draws come from the separate stream
+    (seed, WELL_STREAM), so the main rng sequence of the optimizer is unchanged.
+    Bit-identical to the original implementation inside Quantummodel_code/qpso.py.
+    """
+    S, D = z.shape
+    n_well = int(round(float(well_frac) * (S - 1))) if well_scale > 0.0 else 0
+    assert 0 <= n_well <= S - 1, n_well
+    if n_well == 0:
+        return z
+    rng_w = np.random.default_rng([int(seed), WELL_STREAM])
+    u_w = 1.0 - rng_w.random((n_well, D))
+    s_w = np.where(rng_w.random((n_well, D)) < 0.5, -1.0, 1.0)
+    y = init_z[None, :] + s_w * float(well_scale) * np.log(1.0 / u_w)
+    z = z.copy()
+    z[1:1 + n_well] = np.clip(y, 0.0, 1.0) if boundary == "clip" else reflect01(y)
+    assert z.shape == (S, D) and np.all((z >= 0) & (z <= 1))
+    return z

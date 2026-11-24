@@ -24,6 +24,8 @@ DISPLAY = {
     "gnn_qwqpso": "GNN + QW-QPSO",
     "gnn_qwqpso_noW": "GNN + QW-QPSO w/o W",
     "gnn_qwqpso_noB": "GNN + QW-QPSO w/o B",
+    "gnn_pso_wp": "GNN + short PSO + W + P",
+    "gnn_pso_wpt": "GNN + short PSO + W + P (tuned)",
     # diagnostics (validation only, Table VIII): raw predictions, delta = 0
     "direct_mlp_raw": "Direct pooled MLP (raw)",
     "direct_gnn_raw": "Direct GNN (raw)",
@@ -42,6 +44,12 @@ POLISH_METHODS = ("gnn_pso_p",)
 # GNN prediction) + B (short-budget beta schedule). Config chosen on validation (run_quantum.py).
 QW_METHODS = ("gnn_qwqpso", "gnn_qwqpso_noW", "gnn_qwqpso_noB")
 QW_OFF = dict(well_scale=0.0, well_frac=0.0, beta_start=None, beta_end=None, polish_pops=0)
+# Controls for "does W need QPSO?": PSO (Algorithm 1 update) + the same W + P.
+#   gnn_pso_wp : W and P copied from the selected gnn_qwqpso config, PSO inertia as in the paper
+#                (only the update rule differs from gnn_qwqpso; identical initial population).
+#   gnn_pso_wpt: W, inertia schedule and P tuned on validation with a grid of the same size as
+#                gnn_qwqpso's (7 W x 3 inertia x 2 P = 42 cells) -> balanced tuning effort.
+PW_METHODS = ("gnn_pso_wp", "gnn_pso_wpt")
 
 # key -> (optimizer, init, budget kind, anchored)
 _TABLE = {
@@ -66,6 +74,8 @@ _TABLE = {
     "gnn_qwqpso": ("qpso", "gnn", "short", False),
     "gnn_qwqpso_noW": ("qpso", "gnn", "short", False),
     "gnn_qwqpso_noB": ("qpso", "gnn", "short", False),
+    "gnn_pso_wp": ("pso", "gnn", "short", False),
+    "gnn_pso_wpt": ("pso", "gnn", "short", False),
 }
 
 _OPTIMIZERS = {"pso": ("baseline_code.pso", "run_pso"),
@@ -90,6 +100,8 @@ class MethodSpec:
     well_frac: float = 0.0       # QW component W: fraction of the S-1 random particles drawn in the well
     beta_start: float | None = None   # QW component B: per-method beta schedule (None -> exp default)
     beta_end: float | None = None
+    inertia_start: float | None = None   # PSO inertia schedule (None -> Algorithm 1: 0.9 -> 0.4)
+    inertia_end: float | None = None
 
     @property
     def seed_branch(self) -> str:
@@ -120,7 +132,7 @@ def qw_ablation(key: str, qw: dict) -> dict:
 
 def make_spec(key: str, budget_short: int, budget_full: int, delta: float,
               anchor_w0: float = 0.0, anchor_frac: float = 0.0, tag: str = "",
-              qq: dict | None = None, qw: dict | None = None) -> MethodSpec:
+              qq: dict | None = None, qw: dict | None = None, pw: dict | None = None) -> MethodSpec:
     if key not in _TABLE:
         raise KeyError(f"unknown method {key!r}; known: {sorted(_TABLE)}")
     opt, init, kind, anch = _TABLE[key]
@@ -136,19 +148,31 @@ def make_spec(key: str, budget_short: int, budget_full: int, delta: float,
     elif qq:
         raise ValueError(f"qq configuration given for non-QQ method {key!r}")
     w = dict(QW_OFF)
+    i_s = i_e = None
     if key in QW_METHODS:
         assert qw is not None, f"{key} needs a qw configuration (well_scale, well_frac, beta_*, polish_pops)"
         w = qw_ablation(key, qw)
         q["polish_pops"] = int(w["polish_pops"])
+    elif key == "gnn_pso_wp":
+        assert qw is not None, f"{key} needs the selected gnn_qwqpso configuration (W and P are copied)"
+        w.update(well_scale=float(qw["well_scale"]), well_frac=float(qw["well_frac"]))
+        q["polish_pops"] = int(qw["polish_pops"])      # beta has no PSO meaning: not copied
+    elif key == "gnn_pso_wpt":
+        assert pw is not None, f"{key} needs a pw configuration (well_scale, well_frac, inertia_*, polish_pops)"
+        w.update(well_scale=float(pw["well_scale"]), well_frac=float(pw["well_frac"]))
+        q["polish_pops"] = int(pw["polish_pops"])
+        i_s, i_e = float(pw["inertia_start"]), float(pw["inertia_end"])
     elif qw:
         raise ValueError(f"qw configuration given for non-QW method {key!r}")
+    if pw and key != "gnn_pso_wpt":
+        raise ValueError(f"pw configuration given for {key!r}")
     bs = None if w["beta_start"] is None else float(w["beta_start"])
     be = None if w["beta_end"] is None else float(w["beta_end"])
     assert (bs is None) == (be is None), "beta_start and beta_end must be set together"
     return MethodSpec(key, int(budget), opt, init, d, anch, tag,
                       anchor_w0 if anch else 0.0, anchor_frac if anch else 0.0,
                       str(q["mbest_mode"]), str(q["beta_mode"]), int(q["polish_pops"]),
-                      float(w["well_scale"]), float(w["well_frac"]), bs, be)
+                      float(w["well_scale"]), float(w["well_frac"]), bs, be, i_s, i_e)
 
 
 def get_optimizer(name: str):

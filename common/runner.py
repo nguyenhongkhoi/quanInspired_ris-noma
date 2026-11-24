@@ -238,8 +238,14 @@ def trial_group(task: dict) -> list[dict]:
                                   mbest_mode=spec.mbest_mode, beta_mode=spec.beta_mode,
                                   polish_pops=spec.polish_pops,
                                   well_scale=spec.well_scale, well_frac=spec.well_frac)
-                    elif spec.optimizer == "pso" and spec.polish_pops:
-                        kw.update(polish_pops=spec.polish_pops)
+                    elif spec.optimizer == "pso":
+                        if spec.polish_pops:
+                            kw.update(polish_pops=spec.polish_pops)
+                        if spec.well_scale > 0.0:                 # controls gnn_pso_wp / gnn_pso_wpt
+                            kw.update(well_scale=spec.well_scale, well_frac=spec.well_frac,
+                                      boundary=exp.boundary)
+                        if spec.inertia_start is not None:
+                            kw.update(w_start=spec.inertia_start, w_end=spec.inertia_end)
                     if spec.anchored:
                         kw.update(anchor_z=init_z, anchor_w0=spec.anchor_w0,
                                   anchor_frac=spec.anchor_frac, anchor_gate=exp.anchor_gate)
@@ -275,6 +281,8 @@ def trial_group(task: dict) -> list[dict]:
                     qw_scale=spec.well_scale, qw_frac=spec.well_frac,
                     qw_bs=spec.beta_start if spec.beta_start is not None else exp.beta_start,
                     qw_be=spec.beta_end if spec.beta_end is not None else exp.beta_end,
+                    pw_ws=spec.inertia_start if spec.inertia_start is not None else "",
+                    pw_we=spec.inertia_end if spec.inertia_end is not None else "",
                     hist_rb=json.dumps(hist) if hist is not None else "",
                 )
                 rows.append(row)
