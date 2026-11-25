@@ -39,7 +39,7 @@ Write-Status ("config: " + ((Get-Content $src) -join ' '))
 $t0 = Get-Date
 $log = Join-Path $PSScriptRoot "logs\uni_$Out.txt"
 & $Python Quantummodel_code/run_quantum.py --stage test --methods prior_uqpso,prior_uqpso_p `
-    --baseline-dir $Baseline --out-dir $Out --preset paper --budget-short 150 --k-test $KTest `
+    --baseline-dir $Baseline --out-dir $Out --preset paper --budget-short 150 --k-test 2,3,4,5,6,8,10 --k-subset $KTest `
     --workers $Workers --quiet --no-plots *> $log
 if ($LASTEXITCODE -ne 0) { Write-Status "FAILED test (exit $LASTEXITCODE), output: $log"; exit $LASTEXITCODE }
 Write-Status ("DONE test in {0:hh\:mm\:ss}" -f ((Get-Date) - $t0))
