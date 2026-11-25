@@ -96,7 +96,7 @@ def run_qpso(problem: Problem, budget: int, swarm: int, seed: int,
     T = check_budget(budget, S)
     polish_pops = int(polish_pops)
     assert 0 <= polish_pops <= T - 1, f"polish_pops={polish_pops} needs budget > {polish_pops}*swarm"
-    D = problem.K + 1
+    D = int(getattr(problem, "D", problem.K + 1))   # K+1 allocation coords (+ N RIS phases, common/phase.py)
     rng = np.random.default_rng(seed)
     z = rng.random((S, D))
     _ = rng.uniform(-v_init, v_init, (S, D))   # same draw as PSO velocity init (pairing)

@@ -120,14 +120,26 @@ class ChannelBank:
     L_ru: np.ndarray     # (K+2,) path loss RIS->receiver (Bob, publics, Willie)
     pos: np.ndarray      # (K+2, 2) receiver positions
     mean_har2: float     # mean |h_ar,n|^2 over the bank
+    # keep_raw=True only (RIS-phase extension, common/phase.py): per-block Bob-aligned cascades
+    #   G0[m, r, n] = h_ru[m, r, n] e^{j theta_n(m)},  A0[m, r, n] = h_ar[m, n] G0[m, r, n]
+    # so that for a common phase offset Delta: H = A0 @ e^{j Delta}, G = G0 @ e^{j Delta}.
+    A0: np.ndarray | None = None   # (M, K+2, N) complex128
+    G0: np.ndarray | None = None   # (M, K+2, N) complex128
 
     @property
     def col_willie(self) -> int:
         return self.K + 1
 
 
-def build_bank(sys: SysConfig, layout: Layout, K: int, M: int, seed: int) -> ChannelBank:
-    """Draw M independent fading blocks for (layout, K) and cache X, Y at rho = 1."""
+def build_bank(sys: SysConfig, layout: Layout, K: int, M: int, seed: int,
+               phase_offset: np.ndarray | None = None, keep_raw: bool = False) -> ChannelBank:
+    """Draw M independent fading blocks for (layout, K) and cache X, Y at rho = 1.
+
+    phase_offset (N,) [RIS-phase extension only]: common offset Delta added to the Bob-aligned
+    rule, theta_n = -arg(h_ar,n) - arg(h_rb,n) + Delta_n. None (default) = the paper's rule.
+    The random draws are identical for any phase_offset (same seed -> same fading blocks).
+    keep_raw: also store A0, G0 (see ChannelBank) for fast re-evaluation at any Delta.
+    """
     assert 1 <= K <= layout.pos_pub.shape[0], f"K={K} exceeds layout K_max"
     assert M >= 1
     rng = np.random.default_rng(seed)
@@ -143,6 +155,12 @@ def build_bank(sys: SysConfig, layout: Layout, K: int, M: int, seed: int) -> Cha
 
     X = np.empty((M, R))
     Y = np.empty((M, R))
+    if phase_offset is not None:
+        phase_offset = np.asarray(phase_offset, dtype=float).reshape(N)
+        e_off = np.exp(1j * phase_offset)                                               # (N,)
+    assert not (keep_raw and phase_offset is not None), "keep_raw stores the Delta = 0 cascades"
+    A0 = np.empty((M, R, N), dtype=complex) if keep_raw else None
+    G0 = np.empty((M, R, N), dtype=complex) if keep_raw else None
     sum_har2 = 0.0
     inv_sqrt2 = 1.0 / np.sqrt(2.0)
     for start in range(0, M, _CHUNK):
@@ -153,7 +171,12 @@ def build_bank(sys: SysConfig, layout: Layout, K: int, M: int, seed: int) -> Cha
         h_ru = los_ru[None, :, :] + a_nl * z_ru                                         # (m, R, N)
         # theta_n = -arg(h_ar,n) - arg(h_rb,n)  (Bob = column 0)
         e_th = np.exp(-1j * (np.angle(h_ar) + np.angle(h_ru[:, 0, :])))                 # (m, N)
+        if phase_offset is not None:
+            e_th = e_th * e_off[None, :]
         g = h_ru * e_th[:, None, :]
+        if keep_raw:
+            G0[start:start + m] = g
+            A0[start:start + m] = h_ar[:, None, :] * g
         H = np.einsum("mn,mrn->mr", h_ar, g)
         G = g.sum(axis=2)
         X[start:start + m] = np.abs(H) ** 2
@@ -164,7 +187,7 @@ def build_bank(sys: SysConfig, layout: Layout, K: int, M: int, seed: int) -> Cha
     L_ru = path_loss(sys, dist_to_ris(sys, pos), sys.alpha_ru)
     assert L_ru.shape == (R,)
     assert np.all(np.isfinite(X)) and np.all(np.isfinite(Y))
-    return ChannelBank(layout.layout_id, K, M, X, Y, L_ar, L_ru, pos, sum_har2 / (M * N))
+    return ChannelBank(layout.layout_id, K, M, X, Y, L_ar, L_ru, pos, sum_har2 / (M * N), A0, G0)
 
 
 def bank_seed(master_seed: int, kind: str, layout_id: int, K: int) -> int:

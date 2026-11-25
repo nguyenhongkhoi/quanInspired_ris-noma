@@ -73,7 +73,8 @@ class SwarmMemory:
 
     # ------------------------------------------------------------------
     def _cand(self, z_row: np.ndarray, f, nu, rb) -> Candidate:
-        mb, s, m = z_to_alloc(self.problem.sys, z_row[None, :], self.problem.K)
+        K = self.problem.K     # z may carry extra coordinates after the K+1 allocation ones (RIS phases)
+        mb, s, m = z_to_alloc(self.problem.sys, z_row[None, :K + 1], K)
         return Candidate(z_row.copy(), float(mb[0]), float(s[0]), m[0].copy(), float(rb), bool(f), float(nu))
 
     def _archive_add(self, z: np.ndarray, ev: EvalBatch) -> None:

@@ -208,6 +208,7 @@ class Problem:
         self.eligible = bool(eligible)
 
         cols = np.concatenate([[0], 1 + self.sic_order])          # Bob, publics in SIC order
+        self._cols = cols
         # U = P_a rho2 X / (L_ar (sigma_r2 rho2 Y + sigma_u2 L_ru))
         self._Xs = bank.X[:, cols] / L_ar                          # (M, K+1)
         self._Ys = sys.sigma_r2 * bank.Y[:, cols]                  # (M, K+1)
@@ -237,12 +238,14 @@ class Problem:
         b = self.sys.sigma_r2 / self.L_rw * rho2
         return a0, a1, b
 
-    def xi_gamma_one(self, mb: float, P_a: float, rho2: float) -> float:
+    def xi_gamma_one(self, mb: float, P_a: float, rho2: float, moments=None) -> float:
+        """moments = (E X_w, Var X_w, E Y_w, Var Y_w); None -> this bank's (RIS-phase ext. passes its own)."""
+        EX, VX, EY, VY = (self.EXw, self.VXw, self.EYw, self.VYw) if moments is None else moments
         a0, a1, b = self.willie_coeffs(mb, P_a, rho2)
-        mu0 = a0 * self.EXw + b * self.EYw
-        mu1 = a1 * self.EXw + b * self.EYw
-        v0 = a0 * a0 * self.VXw + b * b * self.VYw     # covariance omitted (eq. 23)
-        v1 = a1 * a1 * self.VXw + b * b * self.VYw
+        mu0 = a0 * EX + b * EY
+        mu1 = a1 * EX + b * EY
+        v0 = a0 * a0 * VX + b * b * VY     # covariance omitted (eq. 23)
+        v1 = a1 * a1 * VX + b * b * VY
         k0, th0 = gamma_params(mu0, v0)
         k1, th1 = gamma_params(mu1, v1)
         return gamma_dep(k0, th0, k1, th1)
@@ -252,7 +255,9 @@ class Problem:
         mb, s, m_sic = z_to_alloc(self.sys, z, self.K)
         return self.evaluate_alloc(mb, s, m_sic, keep_U=keep_U)
 
-    def evaluate_alloc(self, mb, s, m_sic, keep_U: bool = False) -> EvalBatch:
+    def evaluate_alloc(self, mb, s, m_sic, keep_U: bool = False, XY=None) -> EvalBatch:
+        """XY = (X, Y), each (P, M, K+2) at rho = 1 for per-particle RIS phases (common/phase.py);
+        None -> the cached Delta = 0 gains of the bank (paper model, unchanged code path)."""
         sys = self.sys
         K = self.K
         mb = np.atleast_1d(np.asarray(mb, dtype=float))
@@ -263,9 +268,24 @@ class Problem:
         k2 = sys.kappa ** 2
 
         P_a, rho2 = self.powers(s)
+        if XY is None:
+            Xs, Ys = self._Xs[None, :, :], self._Ys[None, :, :]
+            wmom = None
+            elig = np.full(P, self.eligible)
+        else:
+            Xr, Yr = XY
+            R = K + 2
+            assert Xr.shape == (P, self.M, R) and Yr.shape == (P, self.M, R), (Xr.shape, Yr.shape, P, self.M, R)
+            Xs = Xr[:, :, self._cols] / self.bank.L_ar
+            Ys = sys.sigma_r2 * Yr[:, :, self._cols]
+            cw = self.bank.col_willie
+            wmom = (Xr[:, :, cw].mean(axis=1), Xr[:, :, cw].var(axis=1),
+                    Yr[:, :, cw].mean(axis=1), Yr[:, :, cw].var(axis=1))
+            mg = Xr[:, :, :K + 1].mean(axis=1) / (self.bank.L_ar * self.bank.L_ru[None, :K + 1])
+            elig = self.eligible & (mg[:, 0] > mg[:, 1:].max(axis=1))   # Bob still strongest
         # U: (P, M, K+1)
-        U = (P_a * rho2)[:, None, None] * self._Xs[None, :, :] / (
-            rho2[:, None, None] * self._Ys[None, :, :] + self._Ds[None, None, :])
+        U = (P_a * rho2)[:, None, None] * Xs / (
+            rho2[:, None, None] * Ys + self._Ds[None, None, :])
         U_b = U[:, :, 0]
         U_pub = U[:, :, 1:]
 
@@ -290,14 +310,18 @@ class Problem:
         n_out = np.where(margins_ok, (U_b < T[:, None]).sum(axis=1), self.M).astype(np.int64)
         p_b = n_out / self.M
 
-        xi_g = np.array([self.xi_gamma_one(mb[i], P_a[i], rho2[i]) for i in range(P)])
+        if wmom is None:
+            xi_g = np.array([self.xi_gamma_one(mb[i], P_a[i], rho2[i]) for i in range(P)])
+        else:
+            xi_g = np.array([self.xi_gamma_one(mb[i], P_a[i], rho2[i],
+                                               tuple(float(w[i]) for w in wmom)) for i in range(P)])
 
         feas = ((xi_g >= self.xi_t) & np.all(R_pub >= self.R_t, axis=1)
-                & (p_b <= sys.p_max) & self.eligible)
+                & (p_b <= sys.p_max) & elig)
         nu = (np.maximum(self.xi_t - xi_g, 0.0) / self.xi_t
               + np.maximum(self.R_t - R_pub, 0.0).sum(axis=1) / self.R_t
               + np.maximum(p_b - sys.p_max, 0.0) / sys.p_max
-              + (0.0 if self.eligible else 1.0))
+              + np.where(elig, 0.0, 1.0))
         nu = np.where(feas, 0.0, nu)
         return EvalBatch(mb=mb, s=s, m_sic=m_sic, R_b=R_b, R_pub=R_pub, p_b=p_b, n_out=n_out,
                          margins_ok=margins_ok, xi_gamma=xi_g, feasible=feas, nu=nu, A=A,
