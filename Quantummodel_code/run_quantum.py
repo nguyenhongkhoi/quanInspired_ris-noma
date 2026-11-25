@@ -665,7 +665,7 @@ def stage_test(out_dir, bdir, sys_, exp, methods, args, log, quiet, overwrite):
                                          "full_qpso", "gnn_ga", "gnn_de", "full_ga", "full_de", "prior_qwqpso",
                                          "prior_dqpso", "prior_dpolish", "prior_pso", "prior_fullpso",
                                          "prior_fqpso", "prior_fpso", "prior_uqpso", "prior_uqpso_p",
-                                         "prior_upso_p", "prior_udirect", "prior_upso")
+                                         "prior_upso_p", "prior_udirect", "prior_upso", "prior_fpso_plain")
                                 if m in methods],
                     quiet, log, overwrite)
 
@@ -701,7 +701,9 @@ def stage_tables(out_dir, bdir, sys_, exp, log, quiet, plots):
              ("prior_fdirect", "prior_ddirect"), ("prior_fqpso", "prior_dqpso"), ("prior_fqpso", "full_pso"),
              ("prior_fdirect", "full_pso"), ("prior_uqpso_p", "prior_uqpso"), ("prior_uqpso_p", "prior_upso_p"),
              ("prior_uqpso_p", "prior_udirect"), ("prior_upso_p", "prior_udirect"),
-             ("prior_uqpso_p", "prior_upso"), ("prior_upso", "prior_udirect")]
+             ("prior_uqpso_p", "prior_upso"), ("prior_upso", "prior_udirect"),
+             ("prior_fpso", "prior_fpso_plain"), ("prior_fqpso", "prior_fpso_plain"),
+             ("prior_fpso_plain", "prior_fdirect"), ("prior_fpso_plain", "full_pso")]
     pairs = [(a, b) for a, b in pairs if a in present and b in present]
     make_all(out_dir, sys_, exp, test, val, labels_dir=None, models_dir=bdir / "models", cases=cases,
              ref="gnn_qpso", pairs=pairs, plots=plots, optimizer_name="QPSO", quiet=quiet, log=log)
