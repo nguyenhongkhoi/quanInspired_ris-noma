@@ -27,6 +27,7 @@ from common.cli import (CRITICAL_KEYS, add_common_args, add_quantum_args,  # noq
 from common.config import SysConfig  # noqa: E402
 from common.methods import (DPRIOR_BASE_METHODS, DPRIOR_METHODS, FPRIOR_BASE_METHODS, FPRIOR_METHODS,  # noqa: E402
                             POLISH_METHODS, PRIOR_PSO_METHODS, UPRIOR_BASE_METHODS, UPRIOR_METHODS,
+                            UPRIOR_PLAIN_METHODS,
                             PRIOR_BASE_METHODS, PRIOR_METHODS, PW_METHODS, QQ_METHODS, QQ_OFF,
                             QUANTUM_METHODS, QW_METHODS, make_spec)
 from common.runner import run_trial_stage  # noqa: E402
@@ -569,7 +570,7 @@ def stage_test(out_dir, bdir, sys_, exp, methods, args, log, quiet, overwrite):
     pr = selected_prior(out_dir) if "prior_qwqpso" in methods else None
     dpr = (selected_dprior(out_dir)
            if any(m in DPRIOR_METHODS + FPRIOR_METHODS + FPRIOR_BASE_METHODS + UPRIOR_METHODS
-                   + UPRIOR_BASE_METHODS for m in methods)
+                   + UPRIOR_BASE_METHODS + UPRIOR_PLAIN_METHODS for m in methods)
            else None)
     ppr = selected_ppso(out_dir) if any(m in PRIOR_PSO_METHODS for m in methods) else None
     if ppr is not None:
@@ -632,7 +633,7 @@ def stage_test(out_dir, bdir, sys_, exp, methods, args, log, quiet, overwrite):
             specs.append(make_spec(k, B, exp.budget_full, exp.delta_adjust, prior_s=ppr[0]))
         elif k in DPRIOR_METHODS or k in FPRIOR_METHODS or k in UPRIOR_METHODS:
             specs.append(make_spec(k, B, exp.budget_full, exp.delta_adjust, qw=dpr[1], prior_s=dpr[0]))
-        elif k in FPRIOR_BASE_METHODS or k in UPRIOR_BASE_METHODS:   # s of the selected dprior config
+        elif k in FPRIOR_BASE_METHODS or k in UPRIOR_BASE_METHODS or k in UPRIOR_PLAIN_METHODS:   # s of dprior cfg
             specs.append(make_spec(k, B, exp.budget_full, exp.delta_adjust, prior_s=dpr[0]))
         elif k in DPRIOR_BASE_METHODS:
             if k in pb:
@@ -664,7 +665,7 @@ def stage_test(out_dir, bdir, sys_, exp, methods, args, log, quiet, overwrite):
                                          "full_qpso", "gnn_ga", "gnn_de", "full_ga", "full_de", "prior_qwqpso",
                                          "prior_dqpso", "prior_dpolish", "prior_pso", "prior_fullpso",
                                          "prior_fqpso", "prior_fpso", "prior_uqpso", "prior_uqpso_p",
-                                         "prior_upso_p", "prior_udirect")
+                                         "prior_upso_p", "prior_udirect", "prior_upso")
                                 if m in methods],
                     quiet, log, overwrite)
 
@@ -699,7 +700,8 @@ def stage_tables(out_dir, bdir, sys_, exp, log, quiet, plots):
              ("prior_fqpso", "prior_fdirect"), ("prior_fpso", "prior_fdirect"), ("prior_fqpso", "prior_fpso"),
              ("prior_fdirect", "prior_ddirect"), ("prior_fqpso", "prior_dqpso"), ("prior_fqpso", "full_pso"),
              ("prior_fdirect", "full_pso"), ("prior_uqpso_p", "prior_uqpso"), ("prior_uqpso_p", "prior_upso_p"),
-             ("prior_uqpso_p", "prior_udirect"), ("prior_upso_p", "prior_udirect")]
+             ("prior_uqpso_p", "prior_udirect"), ("prior_upso_p", "prior_udirect"),
+             ("prior_uqpso_p", "prior_upso"), ("prior_upso", "prior_udirect")]
     pairs = [(a, b) for a, b in pairs if a in present and b in present]
     make_all(out_dir, sys_, exp, test, val, labels_dir=None, models_dir=bdir / "models", cases=cases,
              ref="gnn_qpso", pairs=pairs, plots=plots, optimizer_name="QPSO", quiet=quiet, log=log)

@@ -47,6 +47,7 @@ DISPLAY = {
     "prior_uqpso_p": "Uniform-split prior + boxed QW-QPSO + polish",
     "prior_upso_p": "Uniform-split prior + boxed PSO + W + polish",
     "prior_udirect": "Uniform-split prior (direct)",
+    "prior_upso": "Uniform-split prior + boxed PSO (plain)",
     # diagnostics (validation only, Table VIII): raw predictions, delta = 0
     "direct_mlp_raw": "Direct pooled MLP (raw)",
     "direct_gnn_raw": "Direct GNN (raw)",
@@ -80,7 +81,7 @@ PRIOR_BASE_METHODS = ("prior_direct", "prior_polish")   # swarm-free references,
 DPRIOR_METHODS = ("prior_dqpso", "prior_dqpso_noW", "prior_dqpso_noBox")
 DPRIOR_BASE_METHODS = ("prior_ddirect", "prior_dpolish")
 BOX_METHODS = ("prior_dqpso", "prior_dqpso_noW", "prior_dpolish", "prior_fqpso", "prior_fpso",
-               "prior_uqpso", "prior_uqpso_p", "prior_upso_p")
+               "prior_uqpso", "prior_uqpso_p", "prior_upso_p", "prior_upso")
 # Fair PSO counterparts of prior_qwqpso (same physics prior, same evaluator / ranking / budget):
 #   prior_pso    : B = 150, prior in particle 0 + the same W (well) and P (polish) components;
 #                  W x PSO-inertia x s tuned on the same validation with a grid of the same size
@@ -101,6 +102,8 @@ FPRIOR_BASE_METHODS = ("prior_fdirect",)
 #   prior_udirect: the uniform-split prior itself (0 evaluations, no repair).
 UPRIOR_METHODS = ("prior_uqpso", "prior_uqpso_p", "prior_upso_p")
 UPRIOR_BASE_METHODS = ("prior_udirect",)
+#   prior_upso: plain PSO (Algorithm 1) from the uniform-split prior in particle 0, no W, no polish.
+UPRIOR_PLAIN_METHODS = ("prior_upso",)
 PRIOR_INITS = ("prior", "dep_prior", "fair_prior", "uni_prior")
 
 # key -> (optimizer, init, budget kind, anchored)
@@ -151,6 +154,7 @@ _TABLE = {
     "prior_uqpso_p": ("qpso", "uni_prior", "short", False),
     "prior_upso_p": ("pso", "uni_prior", "short", False),
     "prior_udirect": (None, "uni_prior", "zero", False),
+    "prior_upso": ("pso", "uni_prior", "short", False),
 }
 
 _OPTIMIZERS = {"pso": ("baseline_code.pso", "run_pso"),
