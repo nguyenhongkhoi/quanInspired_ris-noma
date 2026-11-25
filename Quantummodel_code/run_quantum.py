@@ -665,7 +665,7 @@ def stage_test(out_dir, bdir, sys_, exp, methods, args, log, quiet, overwrite):
                                          "full_qpso", "gnn_ga", "gnn_de", "full_ga", "full_de", "prior_qwqpso",
                                          "prior_dqpso", "prior_dpolish", "prior_pso", "prior_fullpso",
                                          "prior_fqpso", "prior_fpso", "prior_uqpso", "prior_uqpso_p",
-                                         "prior_upso_p", "prior_udirect", "prior_upso", "prior_fpso_plain")
+                                         "prior_upso_p", "prior_udirect", "prior_upso", "prior_fpso_plain", "full_sa", "full_sca")
                                 if m in methods],
                     quiet, log, overwrite)
 

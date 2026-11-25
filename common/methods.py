@@ -30,6 +30,8 @@ DISPLAY = {
     "gnn_ga": "GNN + short GA",
     "full_de": "Full DE",
     "gnn_de": "GNN + short DE",
+    "full_sa": "Full SA",
+    "full_sca": "Full SCA",
     "prior_qwqpso": "Prior + QW-QPSO",
     "prior_direct": "Physics prior (direct)",
     "prior_polish": "Prior + line polish (no swarm)",
@@ -140,6 +142,8 @@ _TABLE = {
     "gnn_ga": ("ga", "gnn", "short", False),
     "full_de": ("de", None, "full", False),
     "gnn_de": ("de", "gnn", "short", False),
+    "full_sa": ("sa", None, "full", False),
+    "full_sca": ("sca", None, "full", False),
     # learning-free variant: closed-form physics prior (common/prior.py) instead of the GNN
     "prior_qwqpso": ("qpso", "prior", "short", False),
     "prior_direct": (None, "prior", "zero", False),
@@ -166,6 +170,8 @@ _OPTIMIZERS = {"pso": ("baseline_code.pso", "run_pso"),
                "qpso": ("Quantummodel_code.qpso", "run_qpso"),
                "ga": ("baseline_code.ga", "run_ga"),
                "de": ("baseline_code.de", "run_de"),
+               "sa": ("baseline_code.sa", "run_sa"),
+               "sca": ("baseline_code.sca", "run_sca"),
                "linepolish": ("baseline_code.linepolish", "run_linepolish")}
 
 
