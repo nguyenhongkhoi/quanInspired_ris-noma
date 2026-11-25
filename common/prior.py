@@ -106,6 +106,19 @@ def dep_prior(prob, s_const: float) -> tuple[float, float, np.ndarray]:
     return mb, s, m
 
 
+def uniform_prior(prob, s_const: float) -> tuple[float, float, np.ndarray]:
+    """Weak prior for the "can the swarm find the public split?" test: m_b on the necessary
+    DEP/QoS bound (mb_cap, 0 objective evaluations) but the public power split EQUALLY,
+    m_j = (1 - m_b)/K, instead of the equal-ceiling split. No feasibility repair."""
+    sys_ = prob.sys
+    K = prob.K
+    s = float(np.clip(s_const, sys_.s_min, sys_.s_max))
+    mb = mb_cap(prob, s)
+    m = np.full(K, (1.0 - mb) / K)
+    assert abs(mb + m.sum() - 1.0) < 1e-12
+    return mb, s, m
+
+
 FAIR_BISECT_ITERS = 12      # (mb_max - mb_min) / 2^12 ~ 1e-4 in m_b; total <= 2 + 12 = 14 evaluations
 
 

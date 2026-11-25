@@ -193,7 +193,7 @@ def trial_group(task: dict) -> list[dict]:
     share_ms = (time.perf_counter() - t0) * 1e3 / max(1, len(cases))
     bank_a = build_bank(sys_, layout, K, exp.assess_samples, bank_seed(exp.seed, "assess", lid, K))
 
-    need = sorted({s.init for s in specs if s.init and s.init not in ("prior", "dep_prior", "fair_prior")})
+    need = sorted({s.init for s in specs if s.init and s.init not in ("prior", "dep_prior", "fair_prior", "uni_prior")})
     models = {}
     for r in range(R):
         for arch in need:
@@ -223,6 +223,10 @@ def trial_group(task: dict) -> list[dict]:
                 elif spec.init == "dep_prior":                 # DEP-aware prior: Willie moments only
                     from .prior import dep_prior
                     mb_a, s_a, m_a = dep_prior(prob, spec.prior_s)
+                    pred = (float(mb_a), float(s_a), np.asarray(m_a, float))
+                elif spec.init == "uni_prior":                 # m_b on the bound, equal public power
+                    from .prior import uniform_prior
+                    mb_a, s_a, m_a = uniform_prior(prob, spec.prior_s)
                     pred = (float(mb_a), float(s_a), np.asarray(m_a, float))
                 elif spec.init == "fair_prior":                # DEP prior bisected under the search targets
                     from .prior import fair_prior
