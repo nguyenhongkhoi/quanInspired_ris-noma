@@ -45,6 +45,8 @@ DISPLAY = {
     "prior_fpso": "Fair DEP-prior + boxed PSO (same W)",
     "prior_uqpso": "Uniform-split prior + boxed QW-QPSO",
     "prior_uqpso_p": "Uniform-split prior + boxed QW-QPSO + polish",
+    "prior_upso_p": "Uniform-split prior + boxed PSO + W + polish",
+    "prior_udirect": "Uniform-split prior (direct)",
     # diagnostics (validation only, Table VIII): raw predictions, delta = 0
     "direct_mlp_raw": "Direct pooled MLP (raw)",
     "direct_gnn_raw": "Direct GNN (raw)",
@@ -78,7 +80,7 @@ PRIOR_BASE_METHODS = ("prior_direct", "prior_polish")   # swarm-free references,
 DPRIOR_METHODS = ("prior_dqpso", "prior_dqpso_noW", "prior_dqpso_noBox")
 DPRIOR_BASE_METHODS = ("prior_ddirect", "prior_dpolish")
 BOX_METHODS = ("prior_dqpso", "prior_dqpso_noW", "prior_dpolish", "prior_fqpso", "prior_fpso",
-               "prior_uqpso", "prior_uqpso_p")
+               "prior_uqpso", "prior_uqpso_p", "prior_upso_p")
 # Fair PSO counterparts of prior_qwqpso (same physics prior, same evaluator / ranking / budget):
 #   prior_pso    : B = 150, prior in particle 0 + the same W (well) and P (polish) components;
 #                  W x PSO-inertia x s tuned on the same validation with a grid of the same size
@@ -95,7 +97,10 @@ FPRIOR_BASE_METHODS = ("prior_fdirect",)
 # Uniform-split prior (common/prior.py uniform_prior): m_b on the DEP/QoS bound, public power split
 # equally (no equal-ceiling formula, no repair) -> the swarm must find the public split itself.
 #   prior_uqpso: + boxed QW-QPSO, no polish;  prior_uqpso_p: same + polish (1 population).
-UPRIOR_METHODS = ("prior_uqpso", "prior_uqpso_p")
+#   prior_upso_p: PSO (Algorithm 1 inertia) with the same W and polish as prior_uqpso_p (paired seeds);
+#   prior_udirect: the uniform-split prior itself (0 evaluations, no repair).
+UPRIOR_METHODS = ("prior_uqpso", "prior_uqpso_p", "prior_upso_p")
+UPRIOR_BASE_METHODS = ("prior_udirect",)
 PRIOR_INITS = ("prior", "dep_prior", "fair_prior", "uni_prior")
 
 # key -> (optimizer, init, budget kind, anchored)
@@ -144,6 +149,8 @@ _TABLE = {
     "prior_fpso": ("pso", "fair_prior", "short", False),
     "prior_uqpso": ("qpso", "uni_prior", "short", False),
     "prior_uqpso_p": ("qpso", "uni_prior", "short", False),
+    "prior_upso_p": ("pso", "uni_prior", "short", False),
+    "prior_udirect": (None, "uni_prior", "zero", False),
 }
 
 _OPTIMIZERS = {"pso": ("baseline_code.pso", "run_pso"),
@@ -233,6 +240,10 @@ def make_spec(key: str, budget_short: int, budget_full: int, delta: float,
         if key == "prior_dqpso_noW":
             w["well_scale"], w["well_frac"] = 0.0, 0.0
         q["polish_pops"] = int(w["polish_pops"])
+    elif key == "prior_upso_p":     # PSO counterpart of prior_uqpso_p: same W, polish 1, Algorithm 1 inertia
+        assert qw is not None, f"{key} needs the selected dprior configuration (W is copied)"
+        w.update(well_scale=float(qw["well_scale"]), well_frac=float(qw["well_frac"]))
+        q["polish_pops"] = 1
     elif key in UPRIOR_METHODS:     # W and beta from the selected dprior config; polish fixed by the key
         assert qw is not None, f"{key} needs the selected dprior configuration (W, beta)"
         w = dict(QW_OFF, **{k: v for k, v in qw.items() if k in QW_OFF})
