@@ -106,6 +106,56 @@ def dep_prior(prob, s_const: float) -> tuple[float, float, np.ndarray]:
     return mb, s, m
 
 
+FAIR_BISECT_ITERS = 12      # (mb_max - mb_min) / 2^12 ~ 1e-4 in m_b; total <= 2 + 12 = 14 evaluations
+
+
+def fair_prior(prob, s_const: float, n_iter: int = FAIR_BISECT_ITERS) -> tuple[float, float, np.ndarray, int]:
+    """Fair prior: the DEP prior made feasible under the SAME search targets as the swarms.
+
+    dep_prior puts m_b on the QoS bound of eq. (19), which uses the rate CEILINGS c_j. The actual
+    public rates R_j = E[min log2(1 + gamma)] are strictly below c_j, so at large K the dep_prior
+    violates the search target R_qos + rate_margin (it only passes assessment thanks to the margin).
+    Here m_b is bisected in [mb_min, mb_cap(s)] with the full search-feasibility test
+    (prob.evaluate_alloc: xi_Gamma, all public rates, Bob outage, eligibility) and the same
+    equal-ceiling public split. Every test costs ONE objective evaluation and is counted.
+
+    Returns (mb, s, m_sic, n_evals). If even mb_min is search-infeasible, the better of the two
+    end points under the feasibility-first ranking is returned (no feasible prior exists).
+    """
+    from .evaluator import rank_order
+    sys_ = prob.sys
+    K = prob.K
+    s = float(np.clip(s_const, sys_.s_min, sys_.s_max))
+
+    def ev(mb: float):
+        m = equal_ceiling_split(sys_, K, mb)
+        e = prob.evaluate_alloc(np.array([mb]), np.array([s]), m[None, :])
+        return bool(e.feasible[0]), float(e.nu[0]), float(e.R_b[0]), m
+
+    hi = mb_cap(prob, s)
+    f_hi, nu_hi, rb_hi, m_hi = ev(hi)
+    n = 1
+    if f_hi:
+        return hi, s, m_hi, n
+    lo = float(sys_.mb_min)
+    f_lo, nu_lo, rb_lo, m_lo = ev(lo)
+    n += 1
+    if not f_lo:                                   # no feasible point on the prior's 1-D path
+        i = int(rank_order([f_hi, f_lo], [nu_hi, nu_lo], [rb_hi, rb_lo])[0])
+        return ((hi, s, m_hi, n) if i == 0 else (lo, s, m_lo, n))
+    m_best = m_lo
+    for _ in range(int(n_iter)):                  # invariant: feasible(lo), not feasible(hi)
+        mid = 0.5 * (lo + hi)
+        f_mid, _, _, m_mid = ev(mid)
+        n += 1
+        if f_mid:
+            lo, m_best = mid, m_mid
+        else:
+            hi = mid
+    assert n <= 2 + int(n_iter), n
+    return lo, s, m_best, n
+
+
 def zb_cap(prob, s_prior: float) -> float:
     """Upper limit of the z_b coordinate for the restricted search box.
 

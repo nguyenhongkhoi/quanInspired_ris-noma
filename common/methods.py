@@ -40,6 +40,9 @@ DISPLAY = {
     "prior_dpolish": "DEP-prior + line polish (no swarm)",
     "prior_pso": "Prior + short PSO (W + P)",
     "prior_fullpso": "Full PSO + prior",
+    "prior_fdirect": "Fair DEP-prior (direct, search-feasible)",
+    "prior_fqpso": "Fair DEP-prior + boxed QW-QPSO",
+    "prior_fpso": "Fair DEP-prior + boxed PSO (same W)",
     # diagnostics (validation only, Table VIII): raw predictions, delta = 0
     "direct_mlp_raw": "Direct pooled MLP (raw)",
     "direct_gnn_raw": "Direct GNN (raw)",
@@ -72,14 +75,21 @@ PRIOR_BASE_METHODS = ("prior_direct", "prior_polish")   # swarm-free references,
 # job is the public split / RIS share / m_b below the cap, not finding the DEP boundary.
 DPRIOR_METHODS = ("prior_dqpso", "prior_dqpso_noW", "prior_dqpso_noBox")
 DPRIOR_BASE_METHODS = ("prior_ddirect", "prior_dpolish")
-BOX_METHODS = ("prior_dqpso", "prior_dqpso_noW", "prior_dpolish")
+BOX_METHODS = ("prior_dqpso", "prior_dqpso_noW", "prior_dpolish", "prior_fqpso", "prior_fpso")
 # Fair PSO counterparts of prior_qwqpso (same physics prior, same evaluator / ranking / budget):
 #   prior_pso    : B = 150, prior in particle 0 + the same W (well) and P (polish) components;
 #                  W x PSO-inertia x s tuned on the same validation with a grid of the same size
 #                  as prior_qwqpso's (beta schedule <-> inertia schedule).
 #   prior_fullpso: B = 1800 (Algorithm 1 settings), prior in particle 0, no W / P.
 PRIOR_PSO_METHODS = ("prior_pso", "prior_fullpso")
-PRIOR_INITS = ("prior", "dep_prior")
+# Fair prior (common/prior.py fair_prior): the DEP prior with m_b bisected under the SAME search
+# targets as every swarm (xi_req + 0.03, R_qos + 0.01, outage); its <= 14 evaluations are counted.
+# The swarm methods reserve one population for it: swarm budget = B - S, so n_evals <= B.
+#   prior_fdirect: fair prior only;  prior_fqpso: + boxed QW-QPSO (selected dprior config);
+#   prior_fpso: + boxed PSO (Algorithm 1 inertia) with the same W and P copied from that config.
+FPRIOR_METHODS = ("prior_fqpso", "prior_fpso")
+FPRIOR_BASE_METHODS = ("prior_fdirect",)
+PRIOR_INITS = ("prior", "dep_prior", "fair_prior")
 
 # key -> (optimizer, init, budget kind, anchored)
 _TABLE = {
@@ -122,6 +132,9 @@ _TABLE = {
     "prior_dpolish": ("linepolish", "dep_prior", "short", False),
     "prior_pso": ("pso", "prior", "short", False),
     "prior_fullpso": ("pso", "prior", "full", False),
+    "prior_fdirect": (None, "fair_prior", "zero", False),
+    "prior_fqpso": ("qpso", "fair_prior", "short", False),
+    "prior_fpso": ("pso", "fair_prior", "short", False),
 }
 
 _OPTIMIZERS = {"pso": ("baseline_code.pso", "run_pso"),
@@ -205,7 +218,7 @@ def make_spec(key: str, budget_short: int, budget_full: int, delta: float,
         assert qw is not None, f"{key} needs a qw configuration (well_scale, well_frac, beta_*, polish_pops)"
         w = qw_ablation(key, qw)
         q["polish_pops"] = int(w["polish_pops"])
-    elif key in DPRIOR_METHODS:
+    elif key in DPRIOR_METHODS or key == "prior_fqpso":
         assert qw is not None, f"{key} needs a qw configuration (well_scale, well_frac, beta_*, polish_pops)"
         w = dict(QW_OFF, **{k: v for k, v in qw.items() if k in QW_OFF})
         if key == "prior_dqpso_noW":
@@ -215,6 +228,10 @@ def make_spec(key: str, budget_short: int, budget_full: int, delta: float,
         assert qw is not None, f"{key} needs a qw configuration (well_scale, well_frac, beta_*, polish_pops)"
         w = dict(QW_OFF, **{k: v for k, v in qw.items() if k in QW_OFF})
         q["polish_pops"] = int(w["polish_pops"])
+    elif key == "prior_fpso":       # W and P copied from the dprior config; PSO keeps Algorithm 1 inertia
+        assert qw is not None, f"{key} needs the selected dprior configuration (W and P are copied)"
+        w.update(well_scale=float(qw["well_scale"]), well_frac=float(qw["well_frac"]))
+        q["polish_pops"] = int(qw["polish_pops"])
     elif key == "gnn_pso_wp":
         assert qw is not None, f"{key} needs the selected gnn_qwqpso configuration (W and P are copied)"
         w.update(well_scale=float(qw["well_scale"]), well_frac=float(qw["well_frac"]))

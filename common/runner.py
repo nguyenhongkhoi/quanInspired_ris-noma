@@ -193,7 +193,7 @@ def trial_group(task: dict) -> list[dict]:
     share_ms = (time.perf_counter() - t0) * 1e3 / max(1, len(cases))
     bank_a = build_bank(sys_, layout, K, exp.assess_samples, bank_seed(exp.seed, "assess", lid, K))
 
-    need = sorted({s.init for s in specs if s.init and s.init not in ("prior", "dep_prior")})
+    need = sorted({s.init for s in specs if s.init and s.init not in ("prior", "dep_prior", "fair_prior")})
     models = {}
     for r in range(R):
         for arch in need:
@@ -215,6 +215,7 @@ def trial_group(task: dict) -> list[dict]:
                 prob = Problem(sys_, bank_s, P_tot, xi, "search")
                 infer_ms = 0.0
                 pred = None
+                n_prior = 0                                    # objective evaluations spent by the init
                 if spec.init == "prior":                       # closed-form physics prior, no model
                     from .prior import physics_prior
                     mb_a, s_a, m_a = physics_prior(sys_, K, spec.prior_s)
@@ -222,6 +223,11 @@ def trial_group(task: dict) -> list[dict]:
                 elif spec.init == "dep_prior":                 # DEP-aware prior: Willie moments only
                     from .prior import dep_prior
                     mb_a, s_a, m_a = dep_prior(prob, spec.prior_s)
+                    pred = (float(mb_a), float(s_a), np.asarray(m_a, float))
+                elif spec.init == "fair_prior":                # DEP prior bisected under the search targets
+                    from .prior import fair_prior
+                    mb_a, s_a, m_a, n_prior = fair_prior(prob, spec.prior_s)
+                    assert 1 <= n_prior <= exp.swarm, (n_prior, exp.swarm)
                     pred = (float(mb_a), float(s_a), np.asarray(m_a, float))
                 elif spec.init:
                     model, norm, _ = models[(spec.init, r)]
@@ -234,7 +240,7 @@ def trial_group(task: dict) -> list[dict]:
                 if spec.optimizer is None:
                     assert pred is not None, f"{spec.key} needs a prediction"
                     mb, s, m_sic = pred
-                    n_evals = 0
+                    n_evals = n_prior
                 else:
                     opt = get_optimizer(spec.optimizer)
                     seed = opt_seed(exp.seed, case["case_id"], exp.pso_seeds[r], spec.seed_branch, spec.budget)
@@ -261,9 +267,12 @@ def trial_group(task: dict) -> list[dict]:
                     if spec.anchored:
                         kw.update(anchor_z=init_z, anchor_w0=spec.anchor_w0,
                                   anchor_frac=spec.anchor_frac, anchor_gate=exp.anchor_gate)
-                    res = opt(prob, spec.budget, exp.swarm, seed, init_z=init_z, **kw)
+                    # fair prior: one population of the budget is reserved for its (<= S) evaluations
+                    b_opt = spec.budget - exp.swarm if spec.init == "fair_prior" else spec.budget
+                    res = opt(prob, b_opt, exp.swarm, seed, init_z=init_z, **kw)
                     mb, s, m_sic = res.best.mb, res.best.s, res.best.m_sic
-                    n_evals = res.n_evals
+                    n_evals = res.n_evals + n_prior
+                    assert n_evals <= spec.budget, (spec.key, n_evals, spec.budget)
                     init_feas = res.init_feasible
                     hist = [round(v, 6) if f else None for v, f in zip(res.history_best_rb, res.history_best_feas)]
                 time_ms = share_ms + (time.perf_counter() - t1) * 1e3
